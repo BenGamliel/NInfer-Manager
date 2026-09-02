@@ -1,0 +1,22 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build-and-audit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Build
+        run: dotnet build src/NInferManager/NInferManager.csproj --configuration Release
+      - name: Verify formatting
+        run: dotnet format src/NInferManager/NInferManager.csproj --verify-no-changes --no-restore
+      - name: Audit repository
+        shell: pwsh
+        run: ./scripts/audit-repository.ps1

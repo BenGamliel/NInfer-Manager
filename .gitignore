@@ -1,0 +1,32 @@
+# Build output
+build/
+dist/
+**/bin/
+**/obj/
+*.user
+*.suo
+*.cache
+
+# Local runtime payload and models
+runtime/
+Models/
+TestWorkspace/
+*.ninfer
+*.ninfer.part
+*.part
+
+# User data and secrets
+Data/
+settings.json
+catalog.cache.json
+*.log
+*.jsonl
+*.zip
+
+# IDE and OS files
+.vs/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

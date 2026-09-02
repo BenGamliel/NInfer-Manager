@@ -1,0 +1,50 @@
+NInfer Manager - Third-Party Notices
+====================================
+
+This is an unofficial project and is not affiliated with or endorsed by the
+NInfer project, NVIDIA, Qwen, Hugging Face, llama.cpp or their contributors.
+
+NInfer and NInfer-windows
+-------------------------
+Copyright their respective contributors. Licensed under Apache License 2.0.
+https://github.com/Neroued/ninfer
+https://github.com/natpate/ninfer-windows
+
+Official NInfer model artifacts
+--------------------------------
+The supported artifacts and their model cards currently identify Apache-2.0.
+Each model card and license is linked in the Model Manager. Users remain
+responsible for reviewing the license of a newly discovered model before use.
+
+llama.cpp Web UI / llama-ui
+---------------------------
+The optional Web UI is distributed by its respective project and retains its
+own license and notices. NInfer Manager serves the unmodified bundled files.
+https://github.com/ggml-org/llama.cpp
+
+FFmpeg
+------
+The Windows NInfer runtime includes FFmpeg shared libraries supplied by the
+official NInfer-windows portable release. FFmpeg is available under LGPL/GPL
+terms depending on build configuration. Source and license information:
+https://ffmpeg.org/legal.html
+
+libcurl
+-------
+Copyright Daniel Stenberg and contributors. curl license:
+https://curl.se/docs/copyright.html
+
+zlib
+----
+Copyright Jean-loup Gailly and Mark Adler. zlib license:
+https://zlib.net/zlib_license.html
+
+Microsoft .NET and Visual C++ Runtime
+-------------------------------------
+Redistributed under the applicable Microsoft license terms.
+https://dotnet.microsoft.com/en-us/dotnet_library_license.htm
+https://visualstudio.microsoft.com/license-terms/
+
+The packaged Licenses directory includes the NInfer Apache license and this
+notice. Upstream components retain all copyright, patent, trademark and
+attribution notices supplied with their distributions.
