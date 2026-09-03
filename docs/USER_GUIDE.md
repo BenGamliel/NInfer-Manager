@@ -32,10 +32,11 @@ returns an empty `/v1/models` list until a model is activated.
 
 ## Models
 
-The action area follows the selected model. An unavailable model shows only
-**Install model**; a partial download shows **Resume download**; an active
-download shows **Pause**; and installed models show only the applicable
-activate, verify, delete and model-card actions.
+The action area follows the selected model. An unavailable model shows
+**Install model** and **Import local file**; a partial download shows
+**Resume download** and **Import local file**; an active download shows **Pause**; and installed models
+show only the applicable activate, verify and delete actions. **Open model
+card** is always available so details and licensing can be reviewed before downloading.
 
 - **Install / Resume** downloads from the model's official Hugging Face
   repository and resumes an interrupted `.part` file.

@@ -125,6 +125,8 @@ internal sealed class ModelDownloadService : IDisposable
         var temp = target + ".importing";
         File.Copy(sourcePath, temp, true);
         File.Move(temp, target, true);
+        var part = target + ".part";
+        if (File.Exists(part)) File.Delete(part);
         _logger.Write($"Model imported: {entry.FileName}");
     }
 

@@ -49,6 +49,7 @@ internal sealed class MainForm : Form
     private readonly ProgressBar _modelProgress = new ThemedProgressBar { Dock = DockStyle.Fill, Height = 12 };
     private readonly Label _modelProgressText = UiTheme.Role(new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }, ThemeRole.MutedText);
     private readonly Button _installButton = Button("Install / Resume");
+    private readonly Button _importButton = Button("Import local file");
     private readonly Button _cancelDownloadButton = Button("Pause", false);
     private readonly Button _setActiveButton = Button("Set active");
     private readonly Button _verifyButton = Button("Verify");
@@ -335,6 +336,7 @@ internal sealed class MainForm : Form
         _modelActionsCard.Dock = DockStyle.Top; _modelActionsCard.Height = 72; _modelActionsCard.Padding = new Padding(12, 9, 12, 9);
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(0, 2, 0, 0) };
         _installButton.Click += async (_, _) => await StartDownloadAsync(); actions.Controls.Add(_installButton);
+        _importButton.Click += async (_, _) => await RunButtonActionAsync(_importButton, ImportSelectedAsync); actions.Controls.Add(_importButton);
         _cancelDownloadButton.Click += (_, _) => _downloadCancellation?.Cancel(); actions.Controls.Add(_cancelDownloadButton);
         _setActiveButton.Click += async (_, _) => await RunButtonActionAsync(_setActiveButton, SetSelectedActiveAsync); actions.Controls.Add(_setActiveButton);
         _verifyButton.Click += async (_, _) => await RunButtonActionAsync(_verifyButton, VerifySelectedAsync); actions.Controls.Add(_verifyButton);
@@ -344,7 +346,7 @@ internal sealed class MainForm : Form
         var progress = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
         progress.Controls.Add(_modelProgress, 0, 0); progress.Controls.Add(_modelProgressText, 1, 0); root.Controls.Add(progress, 0, 4);
-        root.Controls.Add(UiTheme.Role(new Label { Text = "Downloads can be paused and resumed. Models are activated only after size and SHA-256 verification.", AutoSize = true, Padding = new Padding(4, 5, 0, 0) }, ThemeRole.MutedText), 0, 5);
+        root.Controls.Add(UiTheme.Role(new Label { Text = "Review the model card before installing. Downloads can be resumed, and models activate only after size and SHA-256 verification.", AutoSize = true, Padding = new Padding(4, 5, 0, 0) }, ThemeRole.MutedText), 0, 5);
         page.Controls.Add(root); return page;
     }
 
@@ -629,12 +631,14 @@ internal sealed class MainForm : Form
         _installButton.AccessibleName = _installButton.Text;
         _installButton.Visible = !installed && !downloading;
         _installButton.Enabled = _downloadCancellation is null;
+        _importButton.Visible = !installed && !downloading;
+        _importButton.Enabled = _downloadCancellation is null;
         _cancelDownloadButton.Visible = downloading;
         _cancelDownloadButton.Enabled = downloading;
         _setActiveButton.Visible = installed && !active;
         _verifyButton.Visible = installed;
         _deleteButton.Visible = installed;
-        _openModelCardButton.Visible = installed;
+        _openModelCardButton.Visible = true;
     }
 
     private async Task StartDownloadAsync()
