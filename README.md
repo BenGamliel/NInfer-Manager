@@ -1,11 +1,11 @@
 <p align="center"><img src="src/NInferManager/Assets/ninfer-manager.png" width="128" alt="NInfer Manager icon"></p>
 <h1 align="center">NInfer Manager</h1>
-<p align="center">A lightweight Windows control center for local NInfer models.<br>Modern Light/Dark interface, no terminal, no permanently loaded model, and no model files bundled.</p>
+<p align="center">A lightweight Windows control center for running local NInfer models without a terminal.</p>
 <p align="center">
-  <img alt="Windows" src="https://img.shields.io/badge/Windows-11_x64-0078D4?logo=windows11">
-  <img alt=".NET" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet">
-  <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue">
-  <img alt="Status" src="https://img.shields.io/badge/status-v1.0.0_ready-22a06b">
+  <a href="https://github.com/BenGamliel/NInfer-Manager/actions/workflows/ci.yml"><img alt="Build" src="https://github.com/BenGamliel/NInfer-Manager/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/BenGamliel/NInfer-Manager/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BenGamliel/NInfer-Manager"></a>
+  <img alt="Windows 11 x64" src="https://img.shields.io/badge/Windows-11_x64-0078D4?logo=windows11">
+  <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
 </p>
 
 > [!IMPORTANT]
@@ -13,109 +13,118 @@
 
 ![NInfer Manager dashboard](docs/images/dashboard.png)
 
-The modern dashboard keeps engine state, VRAM, GPU use, context capacity and the
-active profile visible at a glance. Metric values and captions resize and wrap
-inside their rings for smaller windows and higher display scaling. Complete warm
-Light and Dark themes cover inputs, menus, scrollbars and advanced controls, and
-the selected mode is remembered.
+NInfer Manager keeps a local API available while the model is unloaded, starts
+NInfer when an inference request arrives, and releases VRAM after a configurable
+idle period. The native WinForms interface provides model downloads, engine
+profiles, diagnostics, updates and tray controls without an Electron runtime.
 
-![NInfer Manager dashboard in Dark mode](docs/images/dashboard-dark.png)
+## Compatibility
 
-## Start clean
+The current `v1.0.0` packages have a deliberately narrow, verified target:
 
-NInfer Manager ships without models and does not pretend that a missing model is
-active. A lightweight first-run Wizard explains the API port, helps choose a
-verified model, and can be skipped at any time.
+| Component | Current release |
+|---|---|
+| Operating system | Windows 11 x64 |
+| GPU | NVIDIA GeForce RTX 5090, 32 GB (`sm_120a`) |
+| Bundled engine | NInfer 0.5.0 native Windows build, CUDA 13.1 baseline |
+| Driver | NVIDIA driver compatible with CUDA 13.1 or later |
+| Model storage | Models are downloaded separately and are not part of either package |
 
-## Interface tour
+Other GPUs and community NInfer forks are **not supported by this release**.
+The CUDA Toolkit itself is not required. See the bundled engine provenance and
+third-party project links in [Third-Party Notices](THIRD-PARTY-NOTICES.txt).
 
-Everyday controls stay visible while the complete engine configuration remains
-available under Advanced settings.
+## Download and quick start
+
+[Download the latest Installer or Portable ZIP](https://github.com/BenGamliel/NInfer-Manager/releases/latest).
+Both packages are model-free.
+
+1. Install the application, or extract the Portable ZIP and run `NInfer Manager.exe`.
+2. Follow the optional first-run wizard, then open **Models** and install an artifact.
+3. Select **Set active**, review the recommended profile and start the API.
+
+No model download starts without confirmation. The Installer stores models and
+settings under `%LOCALAPPDATA%\NInfer Manager`; Portable mode keeps them beside
+the executable.
+
+> [!NOTE]
+> The current binaries are not code-signed, so Windows SmartScreen may display a
+> warning. Release checksums are published in `SHA256SUMS.txt` with each release.
+
+## What the Manager adds
+
+- **On-demand inference:** the API remains reachable while the model is unloaded;
+  the first inference request loads it automatically.
+- **Lifecycle and tray controls:** load, unload, restart, close, and configure or
+  disable the automatic idle unload timer.
+- **Model management:** discover model cards before download, resume downloads,
+  validate size and SHA-256, import existing artifacts, activate, verify or move
+  installed models to the Recycle Bin.
+- **Visual engine profiles:** context, Vision/video, KV precision, KV capacity,
+  CUDA graphs, MTP/DFlash, media budgets, queues, caches, thinking and sampling.
+- **Safe local operation:** loopback binding by default, optional bearer token,
+  one Manager instance and child-process cleanup through a Windows Job Object.
+- **Port recovery:** port `8173` is used by default. Automatic mode selects an
+  available port from `49152–65535`; Locked mode reports the conflict instead.
+- **Maintenance:** update checks, verified package downloads, readable logs and a
+  redacted diagnostics bundle.
+- **Accessible setup:** a skippable first-run wizard, contextual actions and full
+  warm Light and Dark themes.
+
+## API compatibility
+
+The verified OpenAI-compatible inference route is:
+
+```text
+POST http://127.0.0.1:8173/v1/chat/completions
+```
+
+The bundled NInfer engine also provides the Responses API under `/v1/responses`,
+model discovery under `/v1/models`, and Anthropic-compatible Messages support.
+The legacy OpenAI `/v1/completions` route is **not provided**. Manager health is
+available at `/manager/health`. If a bearer token is enabled, clients must send it
+with every protected request.
+
+## Recommended Qwen profile
+
+The tested Qwen3.8-27B NVFP4 preset uses 150,000-token context, Vision/video,
+shared INT8 K/V cache precision, MTP with three draft tokens, CUDA graphs and
+prefix reuse. Automatic unload defaults to three minutes and remains editable.
+NInfer exposes one shared KV precision setting, so K and V cannot be configured
+independently.
+
+## Interface
+
+Everyday status and controls remain visible on the dashboard; the full engine
+configuration is available under Advanced settings.
 
 | Model Manager | Essentials and Advanced settings |
 |---|---|
 | ![NInfer Manager model catalog](docs/images/models.png) | ![NInfer Manager settings](docs/images/settings.png) |
 
-## Why NInfer Manager?
+<details>
+<summary>View the Dark theme</summary>
 
-NInfer is fast, but a command line and long launch arguments should not be a requirement for using a local model. NInfer Manager keeps a stable local API available, loads the selected model only when a request arrives, and releases VRAM after a configurable idle period.
+![NInfer Manager dashboard in Dark mode](docs/images/dashboard-dark.png)
 
-| Capability | Raw NInfer CLI / BAT | NInfer Manager |
-|---|:---:|:---:|
-| OpenAI-compatible endpoint | Yes | Yes |
-| API remains reachable while the model is unloaded | No | Yes |
-| Load on first inference request | Manual restart | Automatic |
-| Configurable idle VRAM unload | Manual stop | Automatic |
-| Notification-area controls | No | Yes |
-| Official model discovery and verified downloads | Manual | Built in |
-| Resumable downloads and SHA-256 verification | Manual | Built in |
-| Per-model visual profiles | No | Yes |
-| Vision, context, KV cache and speculative controls | CLI flags | Visual settings |
-| Portable and installed modes | Runtime only | Both |
-| Redacted diagnostics package | No | Built in |
-| Verified application updates | Manual | Automatic and on demand |
-| Busy API port recovery | Startup failure | Automatic or locked |
-| Guided first setup | No | Built in and skippable |
-| Context-aware model actions | No | Shows only actions valid for the selected model |
+</details>
 
-## Highlights
+## Functional QA record
 
-- **On-demand inference:** the Web UI and API can stay online without consuming model VRAM. The first inference request loads NInfer automatically.
-- **Full lifecycle control:** load, unload, restart, change the idle timer or disable automatic unloading from the app or tray icon.
-- **Model Manager:** discover official model cards, download with resume, validate size and SHA-256, import, activate, verify or move a model to the Recycle Bin. The active or installed model is selected automatically, and unavailable actions stay hidden.
-- **Detailed profiles:** context size, Vision/video, shared K/V precision, KV capacity, CUDA graphs, MTP/DFlash, media budgets, queues, caches, thinking and sampling controls.
-- **Safe local defaults:** loopback-only API, optional bearer token, one running instance and child-process cleanup through a Windows Job Object.
-- **Small idle footprint:** native WinForms UI; no Electron runtime and no embedded browser process.
-- **Built-in updates:** optional automatic checks, a manual **Check for updates** button and SHA-256 verification before an Installer or Portable update is launched.
-- **Predictable ports:** Automatic mode moves to a free Windows dynamic port and reports the change; Locked mode stops and asks instead. Settings also support one-session or saved changes.
-- **Clean first run:** no active model is selected until an artifact is installed and explicitly activated.
+The current application flow was exercised on Windows 11 with a Ryzen 9
+9950X3D, RTX 5090 32 GB and Qwen3.8-27B NVFP4 at 150K context with INT8 KV and
+Vision enabled. Text and image requests, KV allocation, automatic unload,
+process cleanup, Portable startup, silent install and uninstall were verified.
 
-## Verified default profile
+In that run, the Manager settled at 7.7 MiB working set while hidden in the tray,
+and total GPU memory observed while the model was active was approximately 28 GB.
+These are measurements from one functional QA run—not universal performance or
+throughput claims. See [Benchmarks and QA](docs/BENCHMARKS.md) for the complete
+record, environment and methodology.
 
-| Setting | Default |
-|---|---:|
-| Context | 150,000 tokens |
-| Vision and video | Enabled |
-| KV cache | INT8, shared K/V precision |
-| Speculative decoding | MTP, 3 draft tokens |
-| CUDA graphs / prefix reuse | Enabled |
-| Automatic unload | 3 minutes, configurable |
-| Public API | `http://127.0.0.1:8173/v1`; if busy and unlocked, a free port from `49152–65535` is selected and reported |
-
-NInfer currently exposes one shared KV precision setting; separate K and V precisions are therefore not presented as independent controls.
-
-## Measured QA snapshot
-
-These are functional QA measurements, not universal performance claims. They were recorded on Windows 11 with an RTX 5090 32 GB using Qwen3.8-27B NVFP4, 150K context, INT8 KV and Vision enabled.
-
-| State | Manager working set | NInfer process | Total GPU memory observed |
-|---|---:|:---:|---:|
-| Hidden in tray, steady state | 7.7 MiB | No | Existing system use only |
-| Five seconds after cold start | 29.7 MiB | No | Existing system use only |
-| Model active during QA | — | Yes | ~28 GB |
-| After automatic unload | — | No | ~1.4 GB system baseline |
-
-Text generation, image input, 150K KV allocation, automatic unload, process cleanup, Portable startup, silent install and uninstall were tested. See the [benchmark and QA notes](docs/BENCHMARKS.md) for scope and methodology.
-
-## Install
-
-Releases provide two model-free packages:
-
-- **Installer:** per-user installation, Start Menu entry and optional startup shortcut. Models and settings remain under `%LOCALAPPDATA%\NInfer Manager`.
-- **Portable ZIP:** extract anywhere and run `NInfer Manager.exe`. Settings and models stay beside the executable.
-
-Follow the optional Setup Wizard, or open **Models**, select an official artifact,
-choose **Install**, then **Set active**. No model download starts without explicit confirmation.
-
-## Build from source
-
-Requirements: .NET SDK 10, Inno Setup 6, and an official `ninfer-windows` portable release directory.
-
-```powershell
-./scripts/build.ps1 -EngineSource "D:\path\to\ninfer-windows-release"
-```
-
-The build script explicitly excludes `.ninfer` and partial model files. Run `./scripts/audit-repository.ps1` before publishing.
+Deeper compatibility, display-scaling, interrupted-download, concurrency,
+upgrade and signed-distribution test coverage is still planned. Results will be
+documented when those tests have been completed; they are not implied here.
 
 ## Documentation
 
@@ -126,8 +135,24 @@ The build script explicitly excludes `.ninfer` and partial model files. Run `./s
 - [Contributing](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 
+## Build from source
+
+Requirements: .NET SDK 10, Inno Setup 6, and an NInfer Windows portable release
+directory compatible with the selected target.
+
+```powershell
+./scripts/build.ps1 -EngineSource "D:\path\to\ninfer-windows-release"
+```
+
+The build excludes `.ninfer` and partial model files. Run
+`./scripts/audit-repository.ps1` before publishing.
+
 ## Credits and license
 
-NInfer Manager was created and is maintained by **Ben Gamliel**. The Manager source is licensed under [Apache License 2.0](LICENSE).
+NInfer Manager was created and is maintained by **Ben Gamliel**. The Manager
+source is licensed under the [Apache License 2.0](LICENSE).
 
-NInfer, NInfer-windows, the bundled Web UI and runtime libraries remain the work of their respective authors and retain their original licenses and notices. See [Third-Party Notices](THIRD-PARTY-NOTICES.txt) for project links and full attribution. Model licenses are shown through their official model cards.
+NInfer, NInfer-windows, the bundled Web UI and runtime libraries remain the work
+of their respective authors and retain their original licenses and notices. See
+[Third-Party Notices](THIRD-PARTY-NOTICES.txt) for attribution. Model licenses
+are shown through their official model cards.
