@@ -59,7 +59,8 @@ future launches. **Save and restart API** applies the port immediately and saves
 it. **Lock this port** prevents automatic fallback: if the port is busy on the
 next launch, the Manager stops and asks for another port. When unlocked, a busy
 port is replaced automatically with a free port from the Windows dynamic range
-and the chosen address is shown to the user.
+(`49152–65535`) and the chosen address is shown to the user. Clean installations
+start with `8173` as the preferred public API port.
 
 Model-profile changes require restarting NInfer only when it is already loaded.
 **Restore recommended model defaults** affects only the profile selected in the

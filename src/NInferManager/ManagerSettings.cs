@@ -32,7 +32,7 @@ internal sealed class AppSettings
     public int UpdateCheckHours { get; set; } = 24;
 
     [Category("Serving"), DisplayName("Public API port")]
-    public int PublicPort { get; set; } = 48173;
+    public int PublicPort { get; set; } = 8173;
 
     [Category("Serving"), DisplayName("Lock public API port")]
     [Description("When enabled, startup stops and asks for a new port instead of switching automatically if this port is busy.")]

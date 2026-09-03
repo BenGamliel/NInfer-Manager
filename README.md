@@ -78,7 +78,7 @@ NInfer is fast, but a command line and long launch arguments should not be a req
 | Speculative decoding | MTP, 3 draft tokens |
 | CUDA graphs / prefix reuse | Enabled |
 | Automatic unload | 3 minutes, configurable |
-| Public API | `http://127.0.0.1:48173/v1`, automatic fallback when unlocked |
+| Public API | `http://127.0.0.1:8173/v1`; if busy and unlocked, a free port from `49152–65535` is selected and reported |
 
 NInfer currently exposes one shared KV precision setting; separate K and V precisions are therefore not presented as independent controls.
 
