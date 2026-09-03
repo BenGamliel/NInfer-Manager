@@ -8,11 +8,11 @@ internal sealed class FirstRunWizard : Form
     private readonly ModelDownloadService _downloads;
     private readonly ApiProxy _proxy;
     private readonly TabControl _pages = new() { Dock = DockStyle.Fill, Appearance = TabAppearance.FlatButtons, ItemSize = new Size(0, 1), SizeMode = TabSizeMode.Fixed };
-    private readonly ComboBox _portMode = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 310 };
-    private readonly NumericUpDown _port = new() { Minimum = 1024, Maximum = 65535, Width = 150 };
-    private readonly ComboBox _models = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 430 };
+    private readonly ComboBox _portMode = new ThemedComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 310 };
+    private readonly ThemedNumericField _port = new() { Minimum = 1024, Maximum = 65535, Width = 150 };
+    private readonly ComboBox _models = new ThemedComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 430 };
     private readonly Label _modelDetails = new() { AutoSize = true, MaximumSize = new Size(570, 0), ForeColor = UiTheme.Muted };
-    private readonly ProgressBar _progress = new() { Width = 570, Height = 10 };
+    private readonly ProgressBar _progress = new ThemedProgressBar { Width = 570, Height = 10 };
     private readonly Label _progressText = new() { AutoSize = true, ForeColor = UiTheme.Muted };
     private readonly Button _back = ActionButton("Back");
     private readonly Button _next = ActionButton("Continue", true);
@@ -130,6 +130,6 @@ internal sealed class FirstRunWizard : Form
     private static Label Title(string text) => new() { Text = text, AutoSize = true, MaximumSize = new Size(620, 0), ForeColor = UiTheme.Text, Font = new Font("Segoe UI Variable Display Semibold", 22f), Margin = new Padding(0, 0, 0, 8) };
     private static Label Copy(string text) => UiTheme.Role(new Label { Text = text, AutoSize = true, MaximumSize = new Size(610, 0), Font = new Font("Segoe UI Variable Text", 10.5f), Margin = new Padding(0, 0, 0, 24) }, ThemeRole.MutedText);
     private static Label FieldLabel(string text) => new() { Text = text, AutoSize = true, ForeColor = UiTheme.Text, Font = new Font("Segoe UI Variable Text Semibold", 9.5f), Padding = new Padding(0, 8, 8, 8) };
-    private static Button ActionButton(string text, bool primary = false) { var button = new Button { Text = text, AutoSize = true, MinimumSize = new Size(110, 40) }; UiTheme.StyleButton(button, primary); return button; }
+    private static Button ActionButton(string text, bool primary = false) { var button = new ThemedButton { Text = text, AutoSize = true, MinimumSize = new Size(110, 40) }; UiTheme.StyleButton(button, primary); return button; }
     private sealed record WizardModel(ModelCatalogEntry Entry) { public string Name => Entry.DisplayName + (Entry.Vision ? "  •  Vision" : string.Empty); }
 }

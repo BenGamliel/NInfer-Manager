@@ -24,11 +24,11 @@ internal sealed class MainForm : Form
     private readonly List<Button> _navigationButtons = [];
     private readonly Label _headerState = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleCenter };
     private readonly Label _headerEndpoint = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight };
-    private readonly Button _themeToggle = new() { AutoSize = true, MinimumSize = new Size(98, 36) };
+    private readonly Button _themeToggle = new ThemedButton { AutoSize = true, MinimumSize = new Size(98, 36) };
     private readonly Panel _updateBanner = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly Label _updateBannerText = new() { AutoSize = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Button _updateBannerButton = Button("Install update", true, true);
-    private readonly ProgressBar _updateProgress = new() { Dock = DockStyle.Top, Height = 8, Visible = false };
+    private readonly ProgressBar _updateProgress = new ThemedProgressBar { Dock = DockStyle.Top, Height = 8, Visible = false };
     private readonly Label _updateProgressText = UiTheme.Role(new Label { AutoSize = true, Visible = false }, ThemeRole.MutedText);
     private readonly Label _stateValue = ValueLabel();
     private readonly Label _modelValue = ValueLabel();
@@ -45,21 +45,21 @@ internal sealed class MainForm : Form
     private readonly Label _footerStatus = new() { AutoSize = true };
     private readonly DataGridView _modelsGrid = new();
     private readonly TextBox _modelSearch = new() { Width = 280, PlaceholderText = "Search models" };
-    private readonly ComboBox _modelFilter = new() { Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ProgressBar _modelProgress = new() { Dock = DockStyle.Fill, Height = 20 };
+    private readonly ComboBox _modelFilter = new ThemedComboBox { Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ProgressBar _modelProgress = new ThemedProgressBar { Dock = DockStyle.Fill, Height = 12 };
     private readonly Label _modelProgressText = UiTheme.Role(new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }, ThemeRole.MutedText);
     private readonly Button _installButton = Button("Install / Resume");
     private readonly Button _cancelDownloadButton = Button("Pause", false);
     private readonly PropertyGrid _appPropertyGrid = new() { Dock = DockStyle.Fill, PropertySort = PropertySort.Categorized, HelpVisible = true, ToolbarVisible = true };
     private readonly PropertyGrid _profilePropertyGrid = new() { Dock = DockStyle.Fill, PropertySort = PropertySort.Categorized, HelpVisible = true, ToolbarVisible = true };
-    private readonly ComboBox _profileModel = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
+    private readonly ComboBox _profileModel = new ThemedComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
     private readonly CheckBox _startWithWindows = new() { Text = "Start with Windows", AutoSize = true };
     private readonly CheckBox _basicVision = new() { Text = "Enable image and video input", AutoSize = true };
-    private readonly NumericUpDown _basicContext = new() { Minimum = 1024, Maximum = 262144, Increment = 1024, ThousandsSeparator = true, Width = 150 };
-    private readonly ComboBox _basicKv = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
+    private readonly ThemedNumericField _basicContext = new() { Minimum = 1024, Maximum = 262144, Increment = 1024, ThousandsSeparator = true, Width = 150 };
+    private readonly ComboBox _basicKv = new ThemedComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
     private readonly CheckBox _basicAutoUnload = new() { Text = "Unload the model automatically when idle", AutoSize = true };
-    private readonly NumericUpDown _basicIdle = new() { Minimum = 0.1m, Maximum = 10080, DecimalPlaces = 1, Increment = 0.5m, Width = 150 };
-    private readonly NumericUpDown _basicPublicPort = new() { Minimum = 1, Maximum = 65535, Width = 150 };
+    private readonly ThemedNumericField _basicIdle = new() { Minimum = 0.1m, Maximum = 10080, DecimalPlaces = 1, Increment = 0.5m, Width = 150 };
+    private readonly ThemedNumericField _basicPublicPort = new() { Minimum = 1, Maximum = 65535, Width = 150 };
     private readonly CheckBox _basicLockPort = new() { Text = "Lock this port", AutoSize = true };
     private readonly TextBox _basicApiKey = new() { Width = 260, UseSystemPasswordChar = true, PlaceholderText = "Optional — local access is open when empty" };
     private readonly CheckBox _basicAutoUpdates = new() { Text = "Automatically check for NInfer Manager updates", AutoSize = true };
@@ -77,6 +77,7 @@ internal sealed class MainForm : Form
     private readonly Button _restartButton = Button("Restart NInfer");
     private readonly Button _sendTestButton = Button("Send test", true, true);
     private readonly RoundedPanel _noModelCard = UiTheme.Card();
+    private readonly ContextMenuStrip _trayMenu = new();
     private readonly System.Windows.Forms.Timer _visibleTimer = new() { Interval = 1000 };
     private CancellationTokenSource? _downloadCancellation;
     private CancellationTokenSource? _updateCancellation;
@@ -115,24 +116,25 @@ internal sealed class MainForm : Form
         Controls.Add(BuildShell());
         UiTheme.ApplyWindow(this);
         UiTheme.ApplyTree(this);
+        SelectPage(0);
 
-        var trayMenu = new ContextMenuStrip();
-        trayMenu.Items.Add("Open NInfer Manager", null, (_, _) => RestoreFromTray());
-        trayMenu.Items.Add("Open Web UI", null, (_, _) => OpenUrl(_proxy.WebUiUrl));
-        trayMenu.Items.Add(new ToolStripSeparator());
-        trayMenu.Items.Add("Load model", null, async (_, _) => await RunEngineActionAsync(() => _engine.EnsureLoadedAsync()));
-        trayMenu.Items.Add("Unload from VRAM", null, async (_, _) => await RunEngineActionAsync(() => _engine.UnloadAsync("notification area")));
-        trayMenu.Items.Add("Restart NInfer", null, async (_, _) => await RunEngineActionAsync(_engine.RestartAsync));
+        _trayMenu.Items.Add("Open NInfer Manager", null, (_, _) => RestoreFromTray());
+        _trayMenu.Items.Add("Open Web UI", null, (_, _) => OpenUrl(_proxy.WebUiUrl));
+        _trayMenu.Items.Add(new ToolStripSeparator());
+        _trayMenu.Items.Add("Load model", null, async (_, _) => await RunEngineActionAsync(() => _engine.EnsureLoadedAsync()));
+        _trayMenu.Items.Add("Unload from VRAM", null, async (_, _) => await RunEngineActionAsync(() => _engine.UnloadAsync("notification area")));
+        _trayMenu.Items.Add("Restart NInfer", null, async (_, _) => await RunEngineActionAsync(_engine.RestartAsync));
         var idleMenu = new ToolStripMenuItem("Automatic VRAM unload");
         idleMenu.DropDownItems.Add("Off", null, (_, _) => SetIdleFromTray(false, 3));
         idleMenu.DropDownItems.Add("After 3 minutes", null, (_, _) => SetIdleFromTray(true, 3));
         idleMenu.DropDownItems.Add("After 10 minutes", null, (_, _) => SetIdleFromTray(true, 10));
         idleMenu.DropDownItems.Add("After 30 minutes", null, (_, _) => SetIdleFromTray(true, 30));
-        trayMenu.Items.Add(idleMenu);
-        trayMenu.Items.Add("Check for updates", null, async (_, _) => await CheckForUpdatesAsync(true));
-        trayMenu.Items.Add(new ToolStripSeparator());
-        trayMenu.Items.Add("Exit", null, (_, _) => ExitCompletely());
-        _tray = new NotifyIcon { Icon = _icon, Text = "NInfer Manager - Unloaded", Visible = true, ContextMenuStrip = trayMenu };
+        _trayMenu.Items.Add(idleMenu);
+        _trayMenu.Items.Add("Check for updates", null, async (_, _) => await CheckForUpdatesAsync(true));
+        _trayMenu.Items.Add(new ToolStripSeparator());
+        _trayMenu.Items.Add("Exit", null, (_, _) => ExitCompletely());
+        UiTheme.StyleMenu(_trayMenu);
+        _tray = new NotifyIcon { Icon = _icon, Text = "NInfer Manager - Unloaded", Visible = true, ContextMenuStrip = _trayMenu };
         _tray.DoubleClick += (_, _) => RestoreFromTray();
 
         FormClosing += OnFormClosing;
@@ -184,7 +186,7 @@ internal sealed class MainForm : Form
         for (var index = 0; index < names.Length; index++)
         {
             var pageIndex = index;
-            var button = new Button
+            var button = new ThemedButton
             {
                 Text = $"{icons[index]}     {names[index]}",
                 Width = 196,
@@ -207,8 +209,8 @@ internal sealed class MainForm : Form
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         header.Controls.Add(new Label { Text = "Local AI control center", AutoSize = true, Font = new Font("Segoe UI Variable Display Semibold", 13f), Padding = new Padding(0, 7, 0, 0) }, 0, 0);
         var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
-        var statusCard = UiTheme.Card(ThemeRole.SuccessSoft); statusCard.AutoSize = true; statusCard.Padding = new Padding(12, 8, 12, 8); statusCard.Margin = new Padding(0, 1, 12, 0);
-        _headerState.Text = "●  API Online"; _headerState.Font = new Font("Segoe UI Variable Text Semibold", 9f); UiTheme.Role(_headerState, ThemeRole.SuccessSoft); statusCard.Controls.Add(_headerState);
+        var statusCard = UiTheme.Card(ThemeRole.SuccessSoft); statusCard.Size = new Size(102, 36); statusCard.Radius = 16; statusCard.Padding = new Padding(1); statusCard.Margin = new Padding(0, 1, 12, 0);
+        _headerState.AutoSize = false; _headerState.Dock = DockStyle.Fill; _headerState.Text = "●  API Online"; _headerState.Font = new Font("Segoe UI Variable Text Semibold", 9f); UiTheme.Role(_headerState, ThemeRole.SuccessText); statusCard.Controls.Add(_headerState);
         _headerEndpoint.Padding = new Padding(0, 9, 8, 0); UiTheme.Role(_headerEndpoint, ThemeRole.MutedText);
         UiTheme.StyleButton(_themeToggle, ButtonKind.Ghost); _themeToggle.Height = 36; _themeToggle.Click += (_, _) => ToggleTheme();
         headerActions.Controls.Add(statusCard); headerActions.Controls.Add(_headerEndpoint); headerActions.Controls.Add(_themeToggle);
@@ -322,14 +324,18 @@ internal sealed class MainForm : Form
         _modelsGrid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "Status", FillWeight = 105 });
         _modelsGrid.SelectionChanged += (_, _) => RefreshModelButtons();
         var gridCard = UiTheme.Card(); gridCard.Dock = DockStyle.Fill; gridCard.Padding = new Padding(1); gridCard.Controls.Add(_modelsGrid); root.Controls.Add(gridCard, 0, 2);
-        var actionsCard = UiTheme.Card(); actionsCard.Dock = DockStyle.Top; actionsCard.Height = 104; actionsCard.Padding = new Padding(12, 6, 12, 6);
-        var actions = Flow(); actions.AutoSize = false;
-        _installButton.Click += async (_, _) => await StartDownloadAsync(); actions.Controls.Add(_installButton);
-        _cancelDownloadButton.Click += (_, _) => _downloadCancellation?.Cancel(); actions.Controls.Add(_cancelDownloadButton);
-        AddAction(actions, "Set active", SetSelectedActiveAsync); AddAction(actions, "Verify", VerifySelectedAsync);
-        AddAction(actions, "Import file", ImportSelectedAsync); AddAction(actions, "Delete", DeleteSelectedAsync);
-        AddAction(actions, "Open model card", () => { var e = SelectedEntry(); if (e is not null) OpenUrl(e.ModelCardUrl); return Task.CompletedTask; });
-        AddAction(actions, "Check for new models", RefreshCatalogAsync);
+        var actionsCard = UiTheme.Card(); actionsCard.Dock = DockStyle.Top; actionsCard.Height = 118; actionsCard.Padding = new Padding(12, 9, 12, 9);
+        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2 };
+        for (var column = 0; column < 4; column++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50)); actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        _installButton.Click += async (_, _) => await StartDownloadAsync(); AddModelAction(actions, _installButton, 0, 0);
+        _cancelDownloadButton.Click += (_, _) => _downloadCancellation?.Cancel(); AddModelAction(actions, _cancelDownloadButton, 1, 0);
+        AddModelAction(actions, ActionButton("Set active", SetSelectedActiveAsync), 2, 0);
+        AddModelAction(actions, ActionButton("Verify", VerifySelectedAsync), 3, 0);
+        AddModelAction(actions, ActionButton("Import file", ImportSelectedAsync), 0, 1);
+        AddModelAction(actions, ActionButton("Delete", DeleteSelectedAsync, danger: true), 1, 1);
+        AddModelAction(actions, ActionButton("Open model card", () => { var e = SelectedEntry(); if (e is not null) OpenUrl(e.ModelCardUrl); return Task.CompletedTask; }), 2, 1);
+        AddModelAction(actions, ActionButton("Check for new models", RefreshCatalogAsync), 3, 1);
         actionsCard.Controls.Add(actions); root.Controls.Add(actionsCard, 0, 3);
         var progress = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
@@ -358,7 +364,8 @@ internal sealed class MainForm : Form
         _essentialsTabButton.Click += (_, _) => ShowSettingsSection(false); _advancedTabButton.Click += (_, _) => ShowSettingsSection(true);
         selectorFlow.Controls.Add(_essentialsTabButton); selectorFlow.Controls.Add(_advancedTabButton); selector.Controls.Add(selectorFlow); sections.Controls.Add(selector, 0, 0);
         _essentialsSection = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Background, Padding = new Padding(0) };
-        var essentialsCard = UiTheme.Card(); essentialsCard.Dock = DockStyle.Fill; essentialsCard.AutoScroll = true;
+        var essentialsCard = UiTheme.Card(); essentialsCard.Dock = DockStyle.Fill;
+        var essentialsScroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         var fields = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3, Padding = new Padding(4) };
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 290)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         AddSetting(fields, "Vision and video", _basicVision, "Accept images and video frames with compatible models.");
@@ -378,7 +385,7 @@ internal sealed class MainForm : Form
         AddAction(updateActions, "Check for updates", async () => await CheckForUpdatesAsync(true), true);
         updateActions.Controls.Add(_updateProgressText); fields.Controls.Add(updateActions, 1, fields.RowCount); fields.SetColumnSpan(updateActions, 2); fields.RowCount++;
         fields.Controls.Add(_updateProgress, 0, fields.RowCount); fields.SetColumnSpan(_updateProgress, 3); fields.RowCount++;
-        essentialsCard.Controls.Add(fields); _essentialsSection.Controls.Add(essentialsCard);
+        essentialsScroll.Controls.Add(fields); essentialsCard.Controls.Add(essentialsScroll); _essentialsSection.Controls.Add(essentialsCard);
 
         _advancedSection = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Background, Padding = new Padding(0) };
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 360, BackColor = UiTheme.Background };
@@ -808,6 +815,7 @@ internal sealed class MainForm : Form
             _settings.Theme = UiTheme.Dark ? ThemePreference.Light : ThemePreference.Dark;
             _settingsStore.Save(_settings);
             UiTheme.SetTheme(_settings.Theme, this);
+            UiTheme.StyleMenu(_trayMenu);
             _lastProfileSignature = string.Empty;
             RefreshUi();
             SelectPage(_selectedPage);
@@ -842,7 +850,7 @@ internal sealed class MainForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _visibleTimer.Dispose(); _tray.Dispose(); _icon.Dispose(); _downloadCancellation?.Cancel(); _downloadCancellation?.Dispose(); _updateCancellation?.Cancel(); _updateCancellation?.Dispose(); }
+        if (disposing) { _visibleTimer.Dispose(); _tray.Dispose(); _trayMenu.Dispose(); _icon.Dispose(); _downloadCancellation?.Cancel(); _downloadCancellation?.Dispose(); _updateCancellation?.Cancel(); _updateCancellation?.Dispose(); }
         base.Dispose(disposing);
     }
 
@@ -865,7 +873,7 @@ internal sealed class MainForm : Form
 
     private static Button ActionTile(string text)
     {
-        var button = new Button { Text = text, Dock = DockStyle.Fill, Margin = new Padding(4), AccessibleName = text.Replace("\n", " ") };
+        var button = new ThemedButton { Text = text, Dock = DockStyle.Fill, Margin = new Padding(4), AccessibleName = text.Replace("\n", " ") };
         UiTheme.StyleButton(button, ButtonKind.ActionTile); return button;
     }
 
@@ -888,7 +896,7 @@ internal sealed class MainForm : Form
     private static Label ValueLabel() => new() { AutoSize = true, ForeColor = UiTheme.Text, Font = new Font("Segoe UI Variable Text", 9.5f), Padding = new Padding(0, 3, 0, 3) };
     private static Button Button(string text, bool enabled = true, bool primary = false, bool danger = false)
     {
-        var button = new Button { Text = text, AutoSize = true, MinimumSize = new Size(112, 38), Enabled = enabled, AccessibleName = text };
+        var button = new ThemedButton { Text = text, AutoSize = true, MinimumSize = new Size(112, 38), Enabled = enabled, AccessibleName = text };
         UiTheme.StyleButton(button, primary, danger); return button;
     }
     private static FlowLayoutPanel Flow() => new() { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Padding = new Padding(0, 6, 0, 6) };
@@ -901,6 +909,16 @@ internal sealed class MainForm : Form
         table.Controls.Add(UiTheme.Role(new Label { Text = description, AutoSize = true, MaximumSize = new Size(420, 0), Padding = new Padding(0, 9, 0, 9) }, ThemeRole.MutedText), 2, row);
     }
     private static void AddAction(FlowLayoutPanel flow, string text, Func<Task> action, bool primary = false, bool danger = false) { var button = Button(text, true, primary, danger); button.Click += async (_, _) => { button.Enabled = false; try { await action(); } finally { if (!button.IsDisposed) button.Enabled = true; } }; flow.Controls.Add(button); }
+    private static Button ActionButton(string text, Func<Task> action, bool primary = false, bool danger = false)
+    {
+        var button = Button(text, true, primary, danger);
+        button.Click += async (_, _) => { button.Enabled = false; try { await action(); } finally { if (!button.IsDisposed) button.Enabled = true; } };
+        return button;
+    }
+    private static void AddModelAction(TableLayoutPanel table, Button button, int column, int row)
+    {
+        button.AutoSize = false; button.Dock = DockStyle.Fill; button.Margin = new Padding(5); table.Controls.Add(button, column, row);
+    }
 
     private sealed record ModelRow(ModelCatalogEntry Entry, string Status)
     {

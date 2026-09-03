@@ -1,10 +1,11 @@
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace NInferManager;
 
 internal enum ThemePreference { Light, Dark }
-internal enum ThemeRole { Background, Surface, SurfaceAlt, Sidebar, SidebarText, MutedText, AccentSoft, SuccessSoft, WarningSoft }
+internal enum ThemeRole { Background, Surface, SurfaceAlt, Sidebar, SidebarText, MutedText, AccentSoft, SuccessSoft, SuccessText, WarningSoft }
 internal enum ButtonKind { Secondary, Primary, Danger, Ghost, Navigation, ActionTile }
 
 internal static class UiTheme
@@ -32,11 +33,12 @@ internal static class UiTheme
     public static Color SidebarText => Dark ? Color.FromArgb(226, 217, 192) : Color.FromArgb(61, 59, 51);
     public static Color RingTrack => Dark ? Color.FromArgb(58, 57, 48) : Color.FromArgb(239, 236, 226);
 
-    public static void Initialize(ThemePreference preference) => _preference = preference;
+    public static void Initialize(ThemePreference preference) { _preference = preference; ApplyApplicationMode(); }
 
     public static void SetTheme(ThemePreference preference, Form form)
     {
         _preference = preference;
+        ApplyApplicationMode();
         ApplyWindow(form);
         ApplyTree(form);
         form.Invalidate(true);
@@ -70,29 +72,34 @@ internal static class UiTheme
 
     private static void ApplyControl(Control control)
     {
+        ApplyNativeTheme(control);
         if (control.Tag is ThemeRole role) ApplyRole(control, role);
         else if (control.Tag is ButtonKind kind && control is Button button) ApplyButton(button, kind);
         else switch (control)
         {
             case Form form: ApplyWindow(form); break;
-            case RoundedPanel panel: panel.RefreshTheme(); break;
+            case RoundedPanel panel: panel.RefreshTheme(); ApplyNativeTheme(panel); break;
+            case ThemedNumericField numericField: numericField.RefreshTheme(); break;
             case MetricRing ring: ring.BackColor = Surface; ring.ForeColor = Text; break;
             case TabPage:
             case TableLayoutPanel:
             case FlowLayoutPanel:
             case SplitContainer:
-                control.BackColor = Background; control.ForeColor = Text; break;
+            case Panel:
+                control.BackColor = control.Parent?.BackColor ?? Background; control.ForeColor = Text; break;
             case TabControl tabs: tabs.BackColor = Background; tabs.ForeColor = Text; tabs.Invalidate(); break;
             case PropertyGrid grid:
                 grid.BackColor = Surface; grid.ViewBackColor = Surface; grid.ViewForeColor = Text; grid.CategoryForeColor = Text;
                 grid.HelpBackColor = SurfaceAlt; grid.HelpForeColor = Text; grid.CommandsBackColor = Surface; grid.CommandsForeColor = Text; grid.LineColor = Border; break;
             case DataGridView grid: StyleGrid(grid); break;
-            case TextBoxBase textBox: textBox.BackColor = Surface; textBox.ForeColor = Text; textBox.BorderStyle = BorderStyle.FixedSingle; break;
-            case ComboBox combo: combo.BackColor = Surface; combo.ForeColor = Text; break;
-            case NumericUpDown numeric: numeric.BackColor = Surface; numeric.ForeColor = Text; break;
-            case CheckBox checkBox: checkBox.BackColor = Background; checkBox.ForeColor = Text; break;
-            case GroupBox group: group.BackColor = Background; group.ForeColor = Text; break;
+            case TextBoxBase textBox: textBox.BackColor = Surface; textBox.ForeColor = Text; textBox.BorderStyle = BorderStyle.FixedSingle; ApplyNativeTheme(textBox); break;
+            case ComboBox combo: StyleComboBox(combo); break;
+            case NumericUpDown numeric: numeric.BackColor = Surface; numeric.ForeColor = Text; numeric.BorderStyle = BorderStyle.FixedSingle; ApplyNativeTheme(numeric); break;
+            case CheckBox checkBox: checkBox.BackColor = checkBox.Parent?.BackColor ?? Background; checkBox.ForeColor = Text; ApplyNativeTheme(checkBox); break;
+            case GroupBox group: group.BackColor = group.Parent?.BackColor ?? Background; group.ForeColor = Text; break;
             case Label label: label.BackColor = Color.Transparent; label.ForeColor = Text; break;
+            case ToolStrip strip: StyleToolStrip(strip); break;
+            case ProgressBar progress: progress.BackColor = RingTrack; progress.ForeColor = Accent; ApplyNativeTheme(progress); break;
         }
     }
 
@@ -107,6 +114,7 @@ internal static class UiTheme
             ThemeRole.MutedText => (Color.Transparent, Muted),
             ThemeRole.AccentSoft => (AccentSoft, Text),
             ThemeRole.SuccessSoft => (SuccessSoft, Success),
+            ThemeRole.SuccessText => (Color.Transparent, Success),
             ThemeRole.WarningSoft => (AccentSoft, Dark ? Accent : AccentDark),
             _ => (Background, Text),
         };
@@ -123,16 +131,16 @@ internal static class UiTheme
         button.Padding = kind == ButtonKind.Navigation ? new Padding(15, 0, 8, 0) : new Padding(12, 0, 12, 0);
         button.Height = kind == ButtonKind.Navigation ? 48 : kind == ButtonKind.ActionTile ? 72 : 40;
         button.Font = new Font("Segoe UI Variable Text Semibold", kind == ButtonKind.ActionTile ? 9.5f : 9.25f);
-        void Round(object? _, EventArgs __) => ApplyRoundedRegion(button, kind == ButtonKind.ActionTile ? 12 : 9);
-        button.Resize += Round;
-        button.HandleCreated += Round;
+        button.UseVisualStyleBackColor = false;
+        button.Region?.Dispose();
+        button.Region = null;
     }
 
     private static void ApplyButton(Button button, ButtonKind kind)
     {
         button.FlatStyle = FlatStyle.Flat;
-        button.FlatAppearance.BorderSize = kind is ButtonKind.Secondary or ButtonKind.Ghost or ButtonKind.ActionTile ? 1 : 0;
-        button.FlatAppearance.BorderColor = kind == ButtonKind.Danger ? Danger : Border;
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.BorderColor = kind switch { ButtonKind.Primary => AccentDark, ButtonKind.Danger => Danger, ButtonKind.Navigation => Sidebar, _ => Border };
         button.TextAlign = kind == ButtonKind.Navigation ? ContentAlignment.MiddleLeft : ContentAlignment.MiddleCenter;
         button.BackColor = kind switch
         {
@@ -168,6 +176,59 @@ internal static class UiTheme
         grid.DefaultCellStyle = new DataGridViewCellStyle { BackColor = Surface, ForeColor = Text, SelectionBackColor = AccentSoft, SelectionForeColor = Text, Padding = new Padding(8) };
         grid.AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle { BackColor = Dark ? Color.FromArgb(38, 39, 35) : Color.FromArgb(255, 254, 249), ForeColor = Text, SelectionBackColor = AccentSoft, SelectionForeColor = Text };
         grid.RowTemplate.Height = 42; grid.ColumnHeadersHeight = 44;
+        ApplyNativeTheme(grid);
+    }
+
+    public static void StyleMenu(ContextMenuStrip menu)
+    {
+        menu.RenderMode = ToolStripRenderMode.Professional;
+        menu.Renderer = new ToolStripProfessionalRenderer(new WarmColorTable());
+        menu.BackColor = Surface; menu.ForeColor = Text; menu.Font = new Font("Segoe UI Variable Text", 9.25f);
+        StyleMenuItems(menu.Items);
+    }
+
+    private static void StyleMenuItems(ToolStripItemCollection items)
+    {
+        foreach (ToolStripItem item in items)
+        {
+            item.BackColor = Surface; item.ForeColor = Text;
+            if (item is ToolStripMenuItem menuItem)
+            {
+                menuItem.DropDown.BackColor = Surface; menuItem.DropDown.ForeColor = Text;
+                menuItem.DropDown.Renderer = new ToolStripProfessionalRenderer(new WarmColorTable());
+                StyleMenuItems(menuItem.DropDownItems);
+            }
+        }
+    }
+
+    private static void StyleToolStrip(ToolStrip strip)
+    {
+        strip.BackColor = Surface; strip.ForeColor = Text;
+        strip.RenderMode = ToolStripRenderMode.Professional;
+        strip.Renderer = new ToolStripProfessionalRenderer(new WarmColorTable());
+        foreach (ToolStripItem item in strip.Items) { item.BackColor = Surface; item.ForeColor = Text; }
+        ApplyNativeTheme(strip);
+    }
+
+    private static void StyleComboBox(ComboBox combo)
+    {
+        combo.BackColor = Surface; combo.ForeColor = Text; combo.FlatStyle = FlatStyle.Flat;
+        combo.DrawMode = DrawMode.OwnerDrawFixed; combo.ItemHeight = 24;
+        combo.DrawItem -= DrawComboItem; combo.DrawItem += DrawComboItem;
+        ApplyNativeTheme(combo);
+    }
+
+    private static void DrawComboItem(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is not ComboBox combo || e.Index < 0) return;
+        var selected = (e.State & DrawItemState.Selected) != 0;
+        using var background = new SolidBrush(selected ? AccentSoft : Surface);
+        using var foreground = new SolidBrush(Text);
+        e.Graphics.FillRectangle(background, e.Bounds);
+        var text = combo.GetItemText(combo.Items[e.Index]);
+        TextRenderer.DrawText(e.Graphics, text, combo.Font, e.Bounds, foreground.Color,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        e.DrawFocusRectangle();
     }
 
     public static void StyleTabs(TabControl tabs)
@@ -188,6 +249,27 @@ internal static class UiTheme
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
+    [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+    private static extern int SetWindowTheme(IntPtr hwnd, string? subAppName, string? subIdList);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#135")]
+    private static extern int SetPreferredAppMode(int preferredAppMode);
+
+    [DllImport("uxtheme.dll", EntryPoint = "#104")]
+    private static extern void RefreshImmersiveColorPolicyState();
+
+    private static void ApplyApplicationMode()
+    {
+        try { _ = SetPreferredAppMode(Dark ? 2 : 3); RefreshImmersiveColorPolicyState(); }
+        catch (EntryPointNotFoundException) { }
+    }
+
+    internal static void ApplyNativeTheme(Control control)
+    {
+        if (!control.IsHandleCreated) control.CreateControl();
+        _ = SetWindowTheme(control.Handle, Dark ? "DarkMode_Explorer" : "Explorer", null);
+    }
+
     private static void ApplyRoundedRegion(Control control, int radius)
     {
         if (control.Width <= 0 || control.Height <= 0) return;
@@ -203,6 +285,164 @@ internal static class UiTheme
     }
 }
 
+internal sealed class ThemedButton : Button
+{
+    private bool _hovered;
+    private bool _pressed;
+
+    public ThemedButton()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        FlatStyle = FlatStyle.Flat;
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hovered = false; _pressed = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseDown(MouseEventArgs e) { _pressed = true; Invalidate(); base.OnMouseDown(e); }
+    protected override void OnMouseUp(MouseEventArgs e) { _pressed = false; Invalidate(); base.OnMouseUp(e); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(Parent?.BackColor ?? UiTheme.Background);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var kind = Tag is ButtonKind value ? value : ButtonKind.Secondary;
+        var background = Enabled ? BackColor : (UiTheme.Dark ? Color.FromArgb(48, 48, 43) : Color.FromArgb(242, 239, 229));
+        if (Enabled && _hovered) background = FlatAppearance.MouseOverBackColor;
+        if (Enabled && _pressed) background = ControlPaint.Dark(background, .06f);
+        var bounds = new Rectangle(1, 1, Math.Max(1, Width - 3), Math.Max(1, Height - 3));
+        using var path = UiTheme.RoundedPath(bounds, kind == ButtonKind.ActionTile ? 11 : 8);
+        using var fill = new SolidBrush(background);
+        using var border = new Pen(Enabled ? FlatAppearance.BorderColor : UiTheme.Border, 1f);
+        e.Graphics.FillPath(fill, path);
+        e.Graphics.DrawPath(border, path);
+        var textBounds = Rectangle.Inflate(bounds, -Math.Max(7, Padding.Left / 2), -3);
+        var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis;
+        flags |= kind == ButtonKind.Navigation ? TextFormatFlags.Left : TextFormatFlags.HorizontalCenter;
+        if (Text.Contains('\n')) flags |= TextFormatFlags.WordBreak;
+        TextRenderer.DrawText(e.Graphics, Text, Font, textBounds, Enabled ? ForeColor : UiTheme.Muted, flags);
+        if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(bounds, -4, -4), ForeColor, background);
+    }
+}
+
+internal sealed class ThemedProgressBar : ProgressBar
+{
+    public ThemedProgressBar() => SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var bounds = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
+        using var trackPath = UiTheme.RoundedPath(bounds, Math.Max(2, Math.Min(5, Height / 2)));
+        using var track = new SolidBrush(UiTheme.RingTrack); e.Graphics.FillPath(track, trackPath);
+        if (Maximum <= Minimum || Value <= Minimum) return;
+        var ratio = (Value - Minimum) / (double)(Maximum - Minimum);
+        var fillBounds = new Rectangle(0, 0, Math.Max(2, (int)Math.Round(bounds.Width * ratio)), bounds.Height);
+        using var fillPath = UiTheme.RoundedPath(fillBounds, Math.Max(2, Math.Min(5, Height / 2)));
+        using var fill = new SolidBrush(UiTheme.Accent); e.Graphics.FillPath(fill, fillPath);
+    }
+}
+
+internal sealed class ThemedComboBox : ComboBox
+{
+    private const int WmPaint = 0x000F;
+    protected override void WndProc(ref Message message)
+    {
+        base.WndProc(ref message);
+        if (message.Msg != WmPaint || Width < 24 || !IsHandleCreated) return;
+        using var graphics = Graphics.FromHwnd(Handle);
+        var button = new Rectangle(Width - 23, 1, 22, Math.Max(1, Height - 2));
+        using var fill = new SolidBrush(UiTheme.Surface); graphics.FillRectangle(fill, button);
+        using var divider = new Pen(UiTheme.Border); graphics.DrawLine(divider, button.Left, button.Top, button.Left, button.Bottom);
+        using var arrow = new Pen(UiTheme.Muted, 1.6f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        var centerX = button.Left + button.Width / 2; var centerY = button.Top + button.Height / 2;
+        graphics.DrawLine(arrow, centerX - 3, centerY - 1, centerX, centerY + 2);
+        graphics.DrawLine(arrow, centerX, centerY + 2, centerX + 3, centerY - 1);
+    }
+}
+
+internal sealed class ThemedNumericField : UserControl
+{
+    private readonly TextBox _editor = new() { BorderStyle = BorderStyle.None, Dock = DockStyle.Fill, TextAlign = HorizontalAlignment.Left };
+    private readonly SpinButtons _spin = new() { Dock = DockStyle.Right, Width = 20 };
+    private decimal _minimum;
+    private decimal _maximum = decimal.MaxValue;
+    private decimal _increment = 1;
+    private decimal _value;
+    private int _decimalPlaces;
+    private bool _thousandsSeparator;
+
+    public ThemedNumericField()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        Height = 25; MinimumSize = new Size(70, 25); Padding = new Padding(5, 5, 1, 2);
+        Controls.Add(_editor); Controls.Add(_spin);
+        _spin.StepRequested += direction => Value += direction * Increment;
+        _editor.Leave += (_, _) => CommitText();
+        _editor.KeyDown += (_, e) => { if (e.KeyCode == Keys.Up) { Value += Increment; e.SuppressKeyPress = true; } else if (e.KeyCode == Keys.Down) { Value -= Increment; e.SuppressKeyPress = true; } else if (e.KeyCode == Keys.Enter) { CommitText(); e.SuppressKeyPress = true; } };
+        MouseWheel += (_, e) => Value += Math.Sign(e.Delta) * Increment;
+        RefreshTheme(); UpdateText();
+    }
+
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)] public decimal Minimum { get => _minimum; set { _minimum = value; Value = _value; } }
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)] public decimal Maximum { get => _maximum; set { _maximum = value; Value = _value; } }
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)] public decimal Increment { get => _increment; set => _increment = value <= 0 ? 1 : value; }
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)] public decimal Value { get => _value; set { _value = Math.Clamp(value, Minimum, Maximum); UpdateText(); } }
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)] public int DecimalPlaces { get => _decimalPlaces; set { _decimalPlaces = Math.Clamp(value, 0, 8); UpdateText(); } }
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)] public bool ThousandsSeparator { get => _thousandsSeparator; set { _thousandsSeparator = value; UpdateText(); } }
+
+    public void RefreshTheme()
+    {
+        BackColor = UiTheme.Surface; ForeColor = UiTheme.Text;
+        _editor.BackColor = UiTheme.Surface; _editor.ForeColor = UiTheme.Text; _spin.RefreshTheme(); Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e); using var border = new Pen(UiTheme.Border); e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
+    }
+
+    private void CommitText()
+    {
+        if (decimal.TryParse(_editor.Text, NumberStyles.Number, CultureInfo.CurrentCulture, out var parsed)) Value = parsed;
+        else UpdateText();
+    }
+
+    private void UpdateText()
+    {
+        if (_editor.IsDisposed) return;
+        var format = ThousandsSeparator ? $"N{DecimalPlaces}" : $"F{DecimalPlaces}";
+        _editor.Text = Value.ToString(format, CultureInfo.CurrentCulture);
+    }
+
+    private sealed class SpinButtons : Control
+    {
+        public event Action<int>? StepRequested;
+        public SpinButtons() { SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true); Cursor = Cursors.Hand; }
+        public void RefreshTheme() { BackColor = UiTheme.Surface; ForeColor = UiTheme.Muted; Invalidate(); }
+        protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e); StepRequested?.Invoke(e.Y < Height / 2 ? 1 : -1); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.Clear(UiTheme.Surface); using var divider = new Pen(UiTheme.Border); e.Graphics.DrawLine(divider, 0, 0, 0, Height);
+            using var arrow = new Pen(UiTheme.Muted, 1.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+            var centerX = Width / 2; var upperY = Height / 4; var lowerY = Height * 3 / 4;
+            e.Graphics.DrawLine(arrow, centerX - 3, upperY + 1, centerX, upperY - 2); e.Graphics.DrawLine(arrow, centerX, upperY - 2, centerX + 3, upperY + 1);
+            e.Graphics.DrawLine(arrow, centerX - 3, lowerY - 1, centerX, lowerY + 2); e.Graphics.DrawLine(arrow, centerX, lowerY + 2, centerX + 3, lowerY - 1);
+        }
+    }
+}
+
+internal sealed class WarmColorTable : ProfessionalColorTable
+{
+    public override Color ToolStripDropDownBackground => UiTheme.Surface;
+    public override Color ImageMarginGradientBegin => UiTheme.Surface;
+    public override Color ImageMarginGradientMiddle => UiTheme.Surface;
+    public override Color ImageMarginGradientEnd => UiTheme.Surface;
+    public override Color MenuItemSelected => UiTheme.AccentSoft;
+    public override Color MenuItemBorder => UiTheme.Border;
+    public override Color MenuBorder => UiTheme.Border;
+    public override Color SeparatorDark => UiTheme.Border;
+    public override Color SeparatorLight => UiTheme.Border;
+}
+
 internal sealed class RoundedPanel : Panel
 {
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)] public int Radius { get; set; } = 13;
@@ -213,6 +453,7 @@ internal sealed class RoundedPanel : Panel
         BackColor = ThemeRole switch { ThemeRole.AccentSoft => UiTheme.AccentSoft, ThemeRole.SurfaceAlt => UiTheme.SurfaceAlt, ThemeRole.SuccessSoft => UiTheme.SuccessSoft, _ => UiTheme.Surface };
         ForeColor = UiTheme.Text; Invalidate();
     }
+    protected override void OnPaintBackground(PaintEventArgs e) => e.Graphics.Clear(Parent?.BackColor ?? UiTheme.Background);
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;

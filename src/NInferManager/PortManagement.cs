@@ -51,7 +51,7 @@ internal static class PortManagement
 
 internal sealed class PortConflictDialog : Form
 {
-    private readonly NumericUpDown _port = new() { Minimum = 1024, Maximum = 65535, Width = 150 };
+    private readonly ThemedNumericField _port = new() { Minimum = 1024, Maximum = 65535, Width = 150 };
     public int SelectedPort => (int)_port.Value;
 
     public PortConflictDialog(int requestedPort, Icon icon)
@@ -69,8 +69,8 @@ internal sealed class PortConflictDialog : Form
         root.Controls.Add(input, 0, 2);
         var note = new Label { Text = $"Suggested from the Windows dynamic range: {suggested}", AutoSize = true, ForeColor = UiTheme.Muted, Padding = new Padding(0, 4, 0, 12) }; root.Controls.Add(note, 0, 3);
         var actions = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        var use = new Button { Text = "Save port and continue", AutoSize = true, DialogResult = DialogResult.OK }; UiTheme.StyleButton(use, true);
-        var exit = new Button { Text = "Exit", AutoSize = true, DialogResult = DialogResult.Cancel }; UiTheme.StyleButton(exit);
+        var use = new ThemedButton { Text = "Save port and continue", AutoSize = true, DialogResult = DialogResult.OK }; UiTheme.StyleButton(use, true);
+        var exit = new ThemedButton { Text = "Exit", AutoSize = true, DialogResult = DialogResult.Cancel }; UiTheme.StyleButton(exit);
         actions.Controls.Add(use); actions.Controls.Add(exit); root.Controls.Add(actions, 0, 4);
         AcceptButton = use; CancelButton = exit; Controls.Add(root); UiTheme.ApplyWindow(this); UiTheme.ApplyTree(this);
         use.Click += (_, _) => { if (!PortManagement.IsAvailable(SelectedPort)) { MessageBox.Show(this, $"Port {SelectedPort} is also in use. Choose another port.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning); DialogResult = DialogResult.None; } };

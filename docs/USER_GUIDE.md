@@ -18,7 +18,8 @@ returns an empty `/v1/models` list until a model is activated.
 ## Dashboard
 
 - Use the **Light / Dark** control in the top-right corner to switch themes. The
-  choice is saved immediately for future launches.
+  choice is saved immediately for future launches. Inputs, menus, scrollbars,
+  setup dialogs and Advanced settings follow the selected theme as well.
 - The VRAM and GPU rings update while the window is visible. The Context ring
   shows the configured model capacity rather than tokens used by an individual client.
 - Active model settings are summarized as compact profile chips.

@@ -13,8 +13,8 @@
 
 ![NInfer Manager dashboard](docs/images/dashboard.png)
 
-The interface includes warm Light and Dark themes and remembers the selected
-mode between launches.
+The interface includes complete warm Light and Dark themes, including inputs,
+menus, scrollbars and advanced controls, and remembers the selected mode.
 
 ![NInfer Manager dashboard in Dark mode](docs/images/dashboard-dark.png)
 
