@@ -475,18 +475,51 @@ internal sealed class MetricRing : Control
     public string DetailText { get => _detailText; set { _detailText = value; Invalidate(); } }
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public string TitleText { get => _title; set { _title = value; AccessibleName = value; Invalidate(); } }
-    public MetricRing() { DoubleBuffered = true; MinimumSize = new Size(160, 190); BackColor = UiTheme.Surface; ForeColor = UiTheme.Text; AccessibleRole = AccessibleRole.Graphic; }
+    public MetricRing()
+    {
+        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        DoubleBuffered = true; MinimumSize = new Size(160, 190); BackColor = UiTheme.Surface; ForeColor = UiTheme.Text; AccessibleRole = AccessibleRole.Graphic;
+    }
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var titleFont = new Font("Segoe UI Variable Text Semibold", 10f); using var valueFont = new Font("Segoe UI Variable Display Semibold", 22f); using var detailFont = new Font("Segoe UI Variable Text", 9.25f);
+        using var titleFont = new Font("Segoe UI Variable Text Semibold", 10f);
         using var titleBrush = new SolidBrush(UiTheme.Text); using var mutedBrush = new SolidBrush(UiTheme.Muted);
         using var track = new Pen(UiTheme.RingTrack, 13) { StartCap = LineCap.Round, EndCap = LineCap.Round }; using var progress = new Pen(UiTheme.Accent, 13) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         e.Graphics.DrawString(TitleText, titleFont, titleBrush, new RectangleF(8, 2, Width - 16, 28), CenterFormat());
-        var size = Math.Min(Width - 42, Height - 72); var ring = new Rectangle((Width - size) / 2, 34, size, size);
+        var size = Math.Max(1, Math.Min(Width - 42, Height - 72)); var ring = new Rectangle((Width - size) / 2, 34, size, size);
         e.Graphics.DrawArc(track, ring, -90, 359.9f); if (Percentage > 0) e.Graphics.DrawArc(progress, ring, -90, Math.Max(2, Percentage * 3.6f));
-        e.Graphics.DrawString(ValueText, valueFont, titleBrush, new RectangleF(ring.X, ring.Y + ring.Height / 2f - 30, ring.Width, 45), CenterFormat());
-        e.Graphics.DrawString(DetailText, detailFont, mutedBrush, new RectangleF(ring.X, ring.Y + ring.Height / 2f + 13, ring.Width, 28), CenterFormat());
+
+        // Keep every label inside the ring's clear center at any supported size or DPI.
+        var innerInset = Math.Max(18f, track.Width / 2f + 10f);
+        var inner = RectangleF.Inflate(ring, -innerInset, -innerInset);
+        var valueBounds = new RectangleF(inner.X, ring.Y + ring.Height * .29f, inner.Width, ring.Height * .29f);
+        var detailBounds = new RectangleF(inner.X, ring.Y + ring.Height * .55f, inner.Width, ring.Height * .29f);
+        using var valueFont = FittedFont(e.Graphics, ValueText, "Segoe UI Variable Display Semibold", FontStyle.Regular,
+            Math.Clamp(ring.Height * .158f, 14f, 22f), 11f, valueBounds, false);
+        using var detailFont = FittedFont(e.Graphics, DetailText, "Segoe UI Variable Text", FontStyle.Regular,
+            Math.Clamp(ring.Height * .067f, 7.5f, 9.25f), 7f, detailBounds, true);
+        using var valueFormat = CenterFormat(false);
+        using var detailFormat = CenterFormat(true);
+        e.Graphics.DrawString(ValueText, valueFont, titleBrush, valueBounds, valueFormat);
+        e.Graphics.DrawString(DetailText, detailFont, mutedBrush, detailBounds, detailFormat);
     }
-    private static StringFormat CenterFormat() => new() { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter };
+    private static Font FittedFont(Graphics graphics, string text, string family, FontStyle style, float preferredSize, float minimumSize, RectangleF bounds, bool wrap)
+    {
+        for (var size = preferredSize; size > minimumSize; size -= .5f)
+        {
+            using var candidate = new Font(family, size, style);
+            using var format = CenterFormat(wrap);
+            var measured = graphics.MeasureString(text, candidate, new SizeF(bounds.Width, float.MaxValue), format);
+            if (measured.Width <= bounds.Width + 1 && measured.Height <= bounds.Height + 1) return new Font(family, size, style);
+        }
+        return new Font(family, minimumSize, style);
+    }
+    private static StringFormat CenterFormat(bool wrap = false) => new()
+    {
+        Alignment = StringAlignment.Center,
+        LineAlignment = StringAlignment.Center,
+        Trimming = StringTrimming.EllipsisCharacter,
+        FormatFlags = wrap ? StringFormatFlags.LineLimit : StringFormatFlags.NoWrap
+    };
 }

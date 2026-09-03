@@ -14,8 +14,10 @@
 ![NInfer Manager dashboard](docs/images/dashboard.png)
 
 The modern dashboard keeps engine state, VRAM, GPU use, context capacity and the
-active profile visible at a glance. Complete warm Light and Dark themes cover
-inputs, menus, scrollbars and advanced controls, and the selected mode is remembered.
+active profile visible at a glance. Metric values and captions resize and wrap
+inside their rings for smaller windows and higher display scaling. Complete warm
+Light and Dark themes cover inputs, menus, scrollbars and advanced controls, and
+the selected mode is remembered.
 
 ![NInfer Manager dashboard in Dark mode](docs/images/dashboard-dark.png)
 

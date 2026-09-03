@@ -3,7 +3,7 @@
 ## 1.0.0
 
 - Warm modern Light and Dark themes with persistent in-app switching.
-- Redesigned dashboard with live VRAM, configured context and GPU rings, profile chips, quick actions and a compact activity summary.
+- Redesigned dashboard with responsive live VRAM, configured context and GPU rings, profile chips, quick actions and a compact activity summary. Ring labels scale and wrap within their available center at smaller window sizes and higher display scaling.
 - Unified card-based visual language across Models, Settings, Logs, About, setup and port recovery.
 - Correctly rounded, unclipped buttons and status pills, responsive model actions, and fully themed dark inputs, menus, scrollbars and advanced settings.
 - Context-sensitive Model Manager actions: unavailable models show only Install, while installed and active models expose only valid management actions.
