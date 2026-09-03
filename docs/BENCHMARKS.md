@@ -27,3 +27,17 @@ The figures below document one functional QA run, not guaranteed performance.
 
 GPU values are total device memory observed through `nvidia-smi`, not an isolated Manager allocation. Working-set values vary with Windows and runtime activity. Reproduction must use models outside the repository and must not commit settings, logs, model files or identifying paths.
 
+## Not yet validated
+
+The current QA record does not claim coverage for:
+
+- a clean Windows installation or virtual machine;
+- display scaling at 125%, 150% and 200%;
+- interrupted download resume and an intentionally incorrect model hash;
+- occupied-port behavior in both Automatic and Locked modes;
+- streaming cancellation, tool calls and concurrent requests;
+- an in-place upgrade from an older Manager version;
+- a digitally signed distribution or Windows SmartScreen reputation.
+
+These checks will be recorded here after they are run. Until then, the README
+describes only the tested configuration above.

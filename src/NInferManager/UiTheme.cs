@@ -76,31 +76,31 @@ internal static class UiTheme
         if (control.Tag is ThemeRole role) ApplyRole(control, role);
         else if (control.Tag is ButtonKind kind && control is Button button) ApplyButton(button, kind);
         else switch (control)
-        {
-            case Form form: ApplyWindow(form); break;
-            case RoundedPanel panel: panel.RefreshTheme(); ApplyNativeTheme(panel); break;
-            case ThemedNumericField numericField: numericField.RefreshTheme(); break;
-            case MetricRing ring: ring.BackColor = Surface; ring.ForeColor = Text; break;
-            case TabPage:
-            case TableLayoutPanel:
-            case FlowLayoutPanel:
-            case SplitContainer:
-            case Panel:
-                control.BackColor = control.Parent?.BackColor ?? Background; control.ForeColor = Text; break;
-            case TabControl tabs: tabs.BackColor = Background; tabs.ForeColor = Text; tabs.Invalidate(); break;
-            case PropertyGrid grid:
-                grid.BackColor = Surface; grid.ViewBackColor = Surface; grid.ViewForeColor = Text; grid.CategoryForeColor = Text;
-                grid.HelpBackColor = SurfaceAlt; grid.HelpForeColor = Text; grid.CommandsBackColor = Surface; grid.CommandsForeColor = Text; grid.LineColor = Border; break;
-            case DataGridView grid: StyleGrid(grid); break;
-            case TextBoxBase textBox: textBox.BackColor = Surface; textBox.ForeColor = Text; textBox.BorderStyle = BorderStyle.FixedSingle; ApplyNativeTheme(textBox); break;
-            case ComboBox combo: StyleComboBox(combo); break;
-            case NumericUpDown numeric: numeric.BackColor = Surface; numeric.ForeColor = Text; numeric.BorderStyle = BorderStyle.FixedSingle; ApplyNativeTheme(numeric); break;
-            case CheckBox checkBox: checkBox.BackColor = checkBox.Parent?.BackColor ?? Background; checkBox.ForeColor = Text; ApplyNativeTheme(checkBox); break;
-            case GroupBox group: group.BackColor = group.Parent?.BackColor ?? Background; group.ForeColor = Text; break;
-            case Label label: label.BackColor = Color.Transparent; label.ForeColor = Text; break;
-            case ToolStrip strip: StyleToolStrip(strip); break;
-            case ProgressBar progress: progress.BackColor = RingTrack; progress.ForeColor = Accent; ApplyNativeTheme(progress); break;
-        }
+            {
+                case Form form: ApplyWindow(form); break;
+                case RoundedPanel panel: panel.RefreshTheme(); ApplyNativeTheme(panel); break;
+                case ThemedNumericField numericField: numericField.RefreshTheme(); break;
+                case MetricRing ring: ring.BackColor = Surface; ring.ForeColor = Text; break;
+                case TabPage:
+                case TableLayoutPanel:
+                case FlowLayoutPanel:
+                case SplitContainer:
+                case Panel:
+                    control.BackColor = control.Parent?.BackColor ?? Background; control.ForeColor = Text; break;
+                case TabControl tabs: tabs.BackColor = Background; tabs.ForeColor = Text; tabs.Invalidate(); break;
+                case PropertyGrid grid:
+                    grid.BackColor = Surface; grid.ViewBackColor = Surface; grid.ViewForeColor = Text; grid.CategoryForeColor = Text;
+                    grid.HelpBackColor = SurfaceAlt; grid.HelpForeColor = Text; grid.CommandsBackColor = Surface; grid.CommandsForeColor = Text; grid.LineColor = Border; break;
+                case DataGridView grid: StyleGrid(grid); break;
+                case TextBoxBase textBox: textBox.BackColor = Surface; textBox.ForeColor = Text; textBox.BorderStyle = BorderStyle.FixedSingle; ApplyNativeTheme(textBox); break;
+                case ComboBox combo: StyleComboBox(combo); break;
+                case NumericUpDown numeric: numeric.BackColor = Surface; numeric.ForeColor = Text; numeric.BorderStyle = BorderStyle.FixedSingle; ApplyNativeTheme(numeric); break;
+                case CheckBox checkBox: checkBox.BackColor = checkBox.Parent?.BackColor ?? Background; checkBox.ForeColor = Text; ApplyNativeTheme(checkBox); break;
+                case GroupBox group: group.BackColor = group.Parent?.BackColor ?? Background; group.ForeColor = Text; break;
+                case Label label: label.BackColor = Color.Transparent; label.ForeColor = Text; break;
+                case ToolStrip strip: StyleToolStrip(strip); break;
+                case ProgressBar progress: progress.BackColor = RingTrack; progress.ForeColor = Accent; ApplyNativeTheme(progress); break;
+            }
     }
 
     private static void ApplyRole(Control control, ThemeRole role)

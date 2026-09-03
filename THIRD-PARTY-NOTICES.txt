@@ -1,8 +1,10 @@
 NInfer Manager - Third-Party Notices
 ====================================
 
-This is an unofficial project and is not affiliated with or endorsed by the
-NInfer project, NVIDIA, Qwen, Hugging Face, llama.cpp or their contributors.
+NInfer Manager is an independent community project. It is not an official
+NInfer application and is not endorsed by the NInfer maintainers. Product and
+project names below identify the components and services used by the application;
+they do not imply sponsorship or endorsement.
 
 NInfer and NInfer-windows
 -------------------------
@@ -18,8 +20,9 @@ responsible for reviewing the license of a newly discovered model before use.
 
 llama.cpp Web UI / llama-ui
 ---------------------------
-The optional Web UI is distributed by its respective project and retains its
-own license and notices. NInfer Manager serves the unmodified bundled files.
+The browser-based interface included by NInfer-windows is the unmodified
+llama.cpp Web UI. It is a frontend only: NInfer, not llama.cpp, loads and runs
+the model. The Web UI retains its own license and notices.
 https://github.com/ggml-org/llama.cpp
 
 FFmpeg
