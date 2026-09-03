@@ -6,6 +6,7 @@
 - Redesigned dashboard with live VRAM, configured context and GPU rings, profile chips, quick actions and a compact activity summary.
 - Unified card-based visual language across Models, Settings, Logs, About, setup and port recovery.
 - Correctly rounded, unclipped buttons and status pills, responsive model actions, and fully themed dark inputs, menus, scrollbars and advanced settings.
+- Context-sensitive Model Manager actions: unavailable models show only Install, while installed and active models expose only valid management actions.
 - Modern lightweight WinForms application and notification-area controls.
 - Clean no-model first run with a skippable Setup Wizard.
 - Automatic free-port recovery, exact-port locking, and temporary or saved port changes.

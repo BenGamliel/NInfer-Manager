@@ -50,6 +50,12 @@ internal sealed class MainForm : Form
     private readonly Label _modelProgressText = UiTheme.Role(new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }, ThemeRole.MutedText);
     private readonly Button _installButton = Button("Install / Resume");
     private readonly Button _cancelDownloadButton = Button("Pause", false);
+    private readonly Button _setActiveButton = Button("Set active");
+    private readonly Button _verifyButton = Button("Verify");
+    private readonly Button _deleteButton = Button("Delete", danger: true);
+    private readonly Button _openModelCardButton = Button("Open model card");
+    private readonly Button _refreshCatalogButton = Button("Check for new models");
+    private readonly RoundedPanel _modelActionsCard = UiTheme.Card();
     private readonly PropertyGrid _appPropertyGrid = new() { Dock = DockStyle.Fill, PropertySort = PropertySort.Categorized, HelpVisible = true, ToolbarVisible = true };
     private readonly PropertyGrid _profilePropertyGrid = new() { Dock = DockStyle.Fill, PropertySort = PropertySort.Categorized, HelpVisible = true, ToolbarVisible = true };
     private readonly ComboBox _profileModel = new ThemedComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 320 };
@@ -80,6 +86,7 @@ internal sealed class MainForm : Form
     private readonly ContextMenuStrip _trayMenu = new();
     private readonly System.Windows.Forms.Timer _visibleTimer = new() { Interval = 1000 };
     private CancellationTokenSource? _downloadCancellation;
+    private string? _downloadingModelFile;
     private CancellationTokenSource? _updateCancellation;
     private UpdateInfo? _availableUpdate;
     private bool _realExit;
@@ -312,7 +319,8 @@ internal sealed class MainForm : Form
         var filterCard = UiTheme.Card(ThemeRole.SurfaceAlt); filterCard.Dock = DockStyle.Top; filterCard.Height = 62; filterCard.Padding = new Padding(14, 8, 14, 8);
         var filters = Flow();
         _modelSearch.TextChanged += (_, _) => RefreshModels(); _modelFilter.SelectedIndexChanged += (_, _) => RefreshModels();
-        filters.Controls.Add(_modelSearch); filters.Controls.Add(_modelFilter); filterCard.Controls.Add(filters); root.Controls.Add(filterCard, 0, 1);
+        _refreshCatalogButton.Click += async (_, _) => await RefreshCatalogAsync();
+        filters.Controls.Add(_modelSearch); filters.Controls.Add(_modelFilter); filters.Controls.Add(_refreshCatalogButton); filterCard.Controls.Add(filters); root.Controls.Add(filterCard, 0, 1);
         _modelsGrid.Dock = DockStyle.Fill; _modelsGrid.ReadOnly = true; _modelsGrid.AllowUserToAddRows = false; _modelsGrid.AllowUserToDeleteRows = false;
         _modelsGrid.AutoGenerateColumns = false; _modelsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _modelsGrid.MultiSelect = false;
         _modelsGrid.RowHeadersVisible = false; _modelsGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
@@ -324,19 +332,15 @@ internal sealed class MainForm : Form
         _modelsGrid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "Status", FillWeight = 105 });
         _modelsGrid.SelectionChanged += (_, _) => RefreshModelButtons();
         var gridCard = UiTheme.Card(); gridCard.Dock = DockStyle.Fill; gridCard.Padding = new Padding(1); gridCard.Controls.Add(_modelsGrid); root.Controls.Add(gridCard, 0, 2);
-        var actionsCard = UiTheme.Card(); actionsCard.Dock = DockStyle.Top; actionsCard.Height = 118; actionsCard.Padding = new Padding(12, 9, 12, 9);
-        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2 };
-        for (var column = 0; column < 4; column++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50)); actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        _installButton.Click += async (_, _) => await StartDownloadAsync(); AddModelAction(actions, _installButton, 0, 0);
-        _cancelDownloadButton.Click += (_, _) => _downloadCancellation?.Cancel(); AddModelAction(actions, _cancelDownloadButton, 1, 0);
-        AddModelAction(actions, ActionButton("Set active", SetSelectedActiveAsync), 2, 0);
-        AddModelAction(actions, ActionButton("Verify", VerifySelectedAsync), 3, 0);
-        AddModelAction(actions, ActionButton("Import file", ImportSelectedAsync), 0, 1);
-        AddModelAction(actions, ActionButton("Delete", DeleteSelectedAsync, danger: true), 1, 1);
-        AddModelAction(actions, ActionButton("Open model card", () => { var e = SelectedEntry(); if (e is not null) OpenUrl(e.ModelCardUrl); return Task.CompletedTask; }), 2, 1);
-        AddModelAction(actions, ActionButton("Check for new models", RefreshCatalogAsync), 3, 1);
-        actionsCard.Controls.Add(actions); root.Controls.Add(actionsCard, 0, 3);
+        _modelActionsCard.Dock = DockStyle.Top; _modelActionsCard.Height = 72; _modelActionsCard.Padding = new Padding(12, 9, 12, 9);
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(0, 2, 0, 0) };
+        _installButton.Click += async (_, _) => await StartDownloadAsync(); actions.Controls.Add(_installButton);
+        _cancelDownloadButton.Click += (_, _) => _downloadCancellation?.Cancel(); actions.Controls.Add(_cancelDownloadButton);
+        _setActiveButton.Click += async (_, _) => await RunButtonActionAsync(_setActiveButton, SetSelectedActiveAsync); actions.Controls.Add(_setActiveButton);
+        _verifyButton.Click += async (_, _) => await RunButtonActionAsync(_verifyButton, VerifySelectedAsync); actions.Controls.Add(_verifyButton);
+        _deleteButton.Click += async (_, _) => await RunButtonActionAsync(_deleteButton, DeleteSelectedAsync); actions.Controls.Add(_deleteButton);
+        _openModelCardButton.Click += (_, _) => { var entry = SelectedEntry(); if (entry is not null) OpenUrl(entry.ModelCardUrl); }; actions.Controls.Add(_openModelCardButton);
+        _modelActionsCard.Controls.Add(actions); root.Controls.Add(_modelActionsCard, 0, 3);
         var progress = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
         progress.Controls.Add(_modelProgress, 0, 0); progress.Controls.Add(_modelProgressText, 1, 0); root.Controls.Add(progress, 0, 4);
@@ -597,7 +601,27 @@ internal sealed class MainForm : Form
     }
 
     private ModelCatalogEntry? SelectedEntry() => (_modelsGrid.CurrentRow?.DataBoundItem as ModelRow)?.Entry;
-    private void RefreshModelButtons() { _installButton.Enabled = SelectedEntry() is not null && _downloadCancellation is null; }
+    private void RefreshModelButtons()
+    {
+        var entry = SelectedEntry();
+        _modelActionsCard.Visible = entry is not null;
+        if (entry is null) return;
+        var installed = _downloads.IsInstalled(entry);
+        var active = _settings.ActiveModelFile.Equals(entry.FileName, StringComparison.OrdinalIgnoreCase);
+        var downloading = _downloadCancellation is not null && string.Equals(_downloadingModelFile, entry.FileName, StringComparison.OrdinalIgnoreCase);
+        var partial = File.Exists(_downloads.GetModelPath(entry) + ".part");
+
+        _installButton.Text = partial ? "Resume download" : "Install model";
+        _installButton.AccessibleName = _installButton.Text;
+        _installButton.Visible = !installed && !downloading;
+        _installButton.Enabled = _downloadCancellation is null;
+        _cancelDownloadButton.Visible = downloading;
+        _cancelDownloadButton.Enabled = downloading;
+        _setActiveButton.Visible = installed && !active;
+        _verifyButton.Visible = installed;
+        _deleteButton.Visible = installed;
+        _openModelCardButton.Visible = installed;
+    }
 
     private async Task StartDownloadAsync()
     {
@@ -607,12 +631,12 @@ internal sealed class MainForm : Form
                 "This model was discovered in the official upstream catalog after this Manager release. It may require a newer NInfer engine. Continue with the download?",
                 "New upstream model", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
         _downloadCancellation = new CancellationTokenSource();
-        _cancelDownloadButton.Enabled = true; _installButton.Enabled = false;
+        _downloadingModelFile = entry.FileName; RefreshModelButtons();
         var progress = new Progress<DownloadProgress>(p => { _modelProgress.Value = p.Percent; _modelProgressText.Text = p.Description + (p.BytesPerSecond > 0 ? $" — {p.BytesPerSecond / 1024d / 1024d:0.0} MiB/s" : ""); });
         try { await _downloads.DownloadAsync(entry, progress, _downloadCancellation.Token); MessageBox.Show("The model was downloaded and verified successfully.", Text); }
         catch (OperationCanceledException) { _modelProgressText.Text = "Download paused. Select Install / Resume to continue."; }
         catch (Exception exception) { _logger.Write("Model download failed", exception); MessageBox.Show(exception.Message, "Download failed", MessageBoxButtons.OK, MessageBoxIcon.Error); }
-        finally { _downloadCancellation.Dispose(); _downloadCancellation = null; _cancelDownloadButton.Enabled = false; RefreshModels(); }
+        finally { _downloadCancellation.Dispose(); _downloadCancellation = null; _downloadingModelFile = null; RefreshModels(); }
     }
 
     private async Task SetSelectedActiveAsync()
@@ -647,7 +671,9 @@ internal sealed class MainForm : Form
         var entry = SelectedEntry(); if (entry is null) return;
         if (MessageBox.Show($"Move {entry.DisplayName} to the Recycle Bin?", "Delete model", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         if (_engine.IsLoaded && _settings.ActiveModelFile.Equals(entry.FileName, StringComparison.OrdinalIgnoreCase)) await _engine.UnloadAsync("active model deletion");
-        _downloads.Delete(entry); RefreshModels();
+        _downloads.Delete(entry);
+        if (_settings.ActiveModelFile.Equals(entry.FileName, StringComparison.OrdinalIgnoreCase)) { _settings.ActiveModelFile = string.Empty; _settingsStore.Save(_settings); }
+        RefreshModels(); RefreshUi();
     }
 
     private async Task RefreshCatalogAsync()
@@ -909,16 +935,7 @@ internal sealed class MainForm : Form
         table.Controls.Add(UiTheme.Role(new Label { Text = description, AutoSize = true, MaximumSize = new Size(420, 0), Padding = new Padding(0, 9, 0, 9) }, ThemeRole.MutedText), 2, row);
     }
     private static void AddAction(FlowLayoutPanel flow, string text, Func<Task> action, bool primary = false, bool danger = false) { var button = Button(text, true, primary, danger); button.Click += async (_, _) => { button.Enabled = false; try { await action(); } finally { if (!button.IsDisposed) button.Enabled = true; } }; flow.Controls.Add(button); }
-    private static Button ActionButton(string text, Func<Task> action, bool primary = false, bool danger = false)
-    {
-        var button = Button(text, true, primary, danger);
-        button.Click += async (_, _) => { button.Enabled = false; try { await action(); } finally { if (!button.IsDisposed) button.Enabled = true; } };
-        return button;
-    }
-    private static void AddModelAction(TableLayoutPanel table, Button button, int column, int row)
-    {
-        button.AutoSize = false; button.Dock = DockStyle.Fill; button.Margin = new Padding(5); table.Controls.Add(button, column, row);
-    }
+    private static async Task RunButtonActionAsync(Button button, Func<Task> action) { button.Enabled = false; try { await action(); } finally { if (!button.IsDisposed) button.Enabled = true; } }
 
     private sealed record ModelRow(ModelCatalogEntry Entry, string Status)
     {
