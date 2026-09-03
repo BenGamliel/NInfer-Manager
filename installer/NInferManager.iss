@@ -43,10 +43,10 @@ Name: "{localappdata}\NInfer Manager\Data"; Flags: uninsneveruninstall
 Name: "{localappdata}\NInfer Manager\Models"; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{group}\NInfer Manager"; Filename: "{app}\NInfer Manager.exe"
-Name: "{group}\Uninstall NInfer Manager"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\NInfer Manager"; Filename: "{app}\NInfer Manager.exe"; Tasks: desktopicon
-Name: "{userstartup}\NInfer Manager"; Filename: "{app}\NInfer Manager.exe"; Parameters: "--minimized"; Tasks: startup
+Name: "{group}\NInfer Manager"; Filename: "{app}\NInfer Manager.exe"; WorkingDir: "{app}"
+Name: "{group}\Uninstall NInfer Manager"; Filename: "{uninstallexe}"; WorkingDir: "{app}"
+Name: "{autodesktop}\NInfer Manager"; Filename: "{app}\NInfer Manager.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{userstartup}\NInfer Manager"; Filename: "{app}\NInfer Manager.exe"; WorkingDir: "{app}"; Parameters: "--minimized"; Tasks: startup
 
 [Run]
 Filename: "{app}\NInfer Manager.exe"; Description: "Launch NInfer Manager"; Flags: nowait postinstall skipifsilent

@@ -586,8 +586,22 @@ internal sealed class MainForm : Form
             .Where(e => filter switch { "Installed" => _downloads.IsInstalled(e), "Vision" => e.Vision, "Available" => !_downloads.IsInstalled(e), _ => true })
             .Select(e => new ModelRow(e, GetModelStatus(e))).ToList();
         _modelsGrid.DataSource = new BindingList<ModelRow>(rows);
-        if (selected is not null)
-            foreach (DataGridViewRow row in _modelsGrid.Rows) if ((row.DataBoundItem as ModelRow)?.Entry.FileName == selected) { row.Selected = true; break; }
+        var preferred = rows.Any(x => x.Entry.FileName.Equals(selected, StringComparison.OrdinalIgnoreCase))
+            ? selected
+            : rows.FirstOrDefault(x => x.Entry.FileName.Equals(_settings.ActiveModelFile, StringComparison.OrdinalIgnoreCase))?.Entry.FileName
+                ?? rows.FirstOrDefault(x => _downloads.IsInstalled(x.Entry))?.Entry.FileName;
+        if (preferred is not null)
+        {
+            _modelsGrid.ClearSelection();
+            foreach (DataGridViewRow row in _modelsGrid.Rows)
+            {
+                var rowEntry = (row.DataBoundItem as ModelRow)?.Entry;
+                if (rowEntry is null || !rowEntry.FileName.Equals(preferred, StringComparison.OrdinalIgnoreCase)) continue;
+                row.Selected = true;
+                if (row.Cells.Count > 0) _modelsGrid.CurrentCell = row.Cells[0];
+                break;
+            }
+        }
         PopulateProfileSelector(); RefreshModelButtons();
     }
 
