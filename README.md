@@ -13,13 +13,16 @@
 
 ![NInfer Manager dashboard](docs/images/dashboard.png)
 
+The interface includes warm Light and Dark themes and remembers the selected
+mode between launches.
+
+![NInfer Manager dashboard in Dark mode](docs/images/dashboard-dark.png)
+
 ## Start clean
 
 NInfer Manager ships without models and does not pretend that a missing model is
 active. A lightweight first-run Wizard explains the API port, helps choose a
 verified model, and can be skipped at any time.
-
-![NInfer Manager first-run Wizard](docs/images/setup-wizard.png)
 
 ## Interface tour
 

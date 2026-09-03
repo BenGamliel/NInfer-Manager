@@ -17,12 +17,17 @@ returns an empty `/v1/models` list until a model is activated.
 
 ## Dashboard
 
+- Use the **Light / Dark** control in the top-right corner to switch themes. The
+  choice is saved immediately for future launches.
+- The VRAM and GPU rings update while the window is visible. The Context ring
+  shows the configured model capacity rather than tokens used by an individual client.
+- Active model settings are summarized as compact profile chips.
 - **Load model** starts NInfer with the active profile.
 - **Unload from VRAM** stops only the engine; the Manager and public API remain.
 - **Restart NInfer** applies profile changes.
 - **Open Web UI** opens the bundled UI in the default browser.
-- **Send test** sends a real OpenAI Chat Completions request.
-- **Show advanced command** reveals the generated command for transparency and troubleshooting.
+- **Run API test** sends a real OpenAI Chat Completions request and expands the compact test panel.
+- **Copy generated command** in Settings exposes the complete launch command for transparency and troubleshooting.
 
 ## Models
 

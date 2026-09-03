@@ -72,7 +72,7 @@ internal sealed class PortConflictDialog : Form
         var use = new Button { Text = "Save port and continue", AutoSize = true, DialogResult = DialogResult.OK }; UiTheme.StyleButton(use, true);
         var exit = new Button { Text = "Exit", AutoSize = true, DialogResult = DialogResult.Cancel }; UiTheme.StyleButton(exit);
         actions.Controls.Add(use); actions.Controls.Add(exit); root.Controls.Add(actions, 0, 4);
-        AcceptButton = use; CancelButton = exit; Controls.Add(root); UiTheme.ApplyWindow(this);
+        AcceptButton = use; CancelButton = exit; Controls.Add(root); UiTheme.ApplyWindow(this); UiTheme.ApplyTree(this);
         use.Click += (_, _) => { if (!PortManagement.IsAvailable(SelectedPort)) { MessageBox.Show(this, $"Port {SelectedPort} is also in use. Choose another port.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning); DialogResult = DialogResult.None; } };
     }
 }

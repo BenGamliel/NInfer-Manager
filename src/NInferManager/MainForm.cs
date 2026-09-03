@@ -18,24 +18,36 @@ internal sealed class MainForm : Form
     private readonly PortStartupResult _portStartup;
     private readonly Icon _icon;
     private readonly NotifyIcon _tray;
-    private readonly TabControl _tabs = new() { Dock = DockStyle.Fill };
+    private readonly Panel _pageHost = new() { Dock = DockStyle.Fill };
+    private readonly List<Panel> _pages = [];
+    private int _selectedPage;
     private readonly List<Button> _navigationButtons = [];
-    private readonly Label _headerState = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight };
+    private readonly Label _headerState = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleCenter };
+    private readonly Label _headerEndpoint = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight };
+    private readonly Button _themeToggle = new() { AutoSize = true, MinimumSize = new Size(98, 36) };
     private readonly Panel _updateBanner = new() { Dock = DockStyle.Fill, Visible = false };
     private readonly Label _updateBannerText = new() { AutoSize = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Button _updateBannerButton = Button("Install update", true, true);
     private readonly ProgressBar _updateProgress = new() { Dock = DockStyle.Top, Height = 8, Visible = false };
-    private readonly Label _updateProgressText = new() { AutoSize = true, ForeColor = UiTheme.Muted, Visible = false };
+    private readonly Label _updateProgressText = UiTheme.Role(new Label { AutoSize = true, Visible = false }, ThemeRole.MutedText);
     private readonly Label _stateValue = ValueLabel();
     private readonly Label _modelValue = ValueLabel();
     private readonly Label _apiValue = ValueLabel();
     private readonly Label _profileValue = ValueLabel();
     private readonly Label _gpuValue = ValueLabel();
+    private readonly MetricRing _vramRing = new() { TitleText = "VRAM", Dock = DockStyle.Fill };
+    private readonly MetricRing _contextRing = new() { TitleText = "Context", Dock = DockStyle.Fill };
+    private readonly MetricRing _gpuRing = new() { TitleText = "GPU", Dock = DockStyle.Fill };
+    private readonly FlowLayoutPanel _profileChips = new() { Dock = DockStyle.Fill, AutoScroll = false, WrapContents = true };
+    private readonly Label _activityEngine = new() { AutoSize = true };
+    private readonly Label _activityApi = new() { AutoSize = true };
+    private readonly Label _activityLifecycle = new() { AutoSize = true };
+    private readonly Label _footerStatus = new() { AutoSize = true };
     private readonly DataGridView _modelsGrid = new();
     private readonly TextBox _modelSearch = new() { Width = 280, PlaceholderText = "Search models" };
     private readonly ComboBox _modelFilter = new() { Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ProgressBar _modelProgress = new() { Dock = DockStyle.Fill, Height = 20 };
-    private readonly Label _modelProgressText = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+    private readonly Label _modelProgressText = UiTheme.Role(new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }, ThemeRole.MutedText);
     private readonly Button _installButton = Button("Install / Resume");
     private readonly Button _cancelDownloadButton = Button("Pause", false);
     private readonly PropertyGrid _appPropertyGrid = new() { Dock = DockStyle.Fill, PropertySort = PropertySort.Categorized, HelpVisible = true, ToolbarVisible = true };
@@ -51,13 +63,20 @@ internal sealed class MainForm : Form
     private readonly CheckBox _basicLockPort = new() { Text = "Lock this port", AutoSize = true };
     private readonly TextBox _basicApiKey = new() { Width = 260, UseSystemPasswordChar = true, PlaceholderText = "Optional — local access is open when empty" };
     private readonly CheckBox _basicAutoUpdates = new() { Text = "Automatically check for NInfer Manager updates", AutoSize = true };
+    private readonly Button _essentialsTabButton = Button("Essentials");
+    private readonly Button _advancedTabButton = Button("Advanced");
+    private readonly Panel _settingsSectionHost = new() { Dock = DockStyle.Fill };
+    private Panel? _essentialsSection;
+    private Panel? _advancedSection;
+    private bool _advancedSettingsVisible;
     private readonly TextBox _logBox = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, WordWrap = false, Dock = DockStyle.Fill, Font = new Font("Consolas", 9f) };
     private readonly TextBox _testPrompt = new() { Text = "Reply with exactly: NInfer Manager OK", Dock = DockStyle.Fill };
     private readonly TextBox _testOutput = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
     private readonly Button _loadButton = Button("Load model");
+    private readonly Button _unloadButton = Button("Unload model", true, true);
     private readonly Button _restartButton = Button("Restart NInfer");
     private readonly Button _sendTestButton = Button("Send test", true, true);
-    private readonly Panel _noModelCard = UiTheme.Card();
+    private readonly RoundedPanel _noModelCard = UiTheme.Card();
     private readonly System.Windows.Forms.Timer _visibleTimer = new() { Interval = 1000 };
     private CancellationTokenSource? _downloadCancellation;
     private CancellationTokenSource? _updateCancellation;
@@ -65,6 +84,9 @@ internal sealed class MainForm : Form
     private bool _realExit;
     private int _savedPublicPort;
     private int _savedBackendPort;
+    private string _lastProfileSignature = string.Empty;
+    private int _gpuRefreshTicks;
+    private bool _gpuRefreshRunning;
 
     private bool _startHidden;
 
@@ -84,13 +106,15 @@ internal sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI Variable Text", 9.25f);
 
-        _tabs.TabPages.Add(BuildDashboard());
-        _tabs.TabPages.Add(BuildModelsPage());
-        _tabs.TabPages.Add(BuildSettingsPage());
-        _tabs.TabPages.Add(BuildLogsPage());
-        _tabs.TabPages.Add(BuildAboutPage());
+        _pages.Add(BuildDashboard());
+        _pages.Add(BuildModelsPage());
+        _pages.Add(BuildSettingsPage());
+        _pages.Add(BuildLogsPage());
+        _pages.Add(BuildAboutPage());
+        foreach (var page in _pages) { page.Dock = DockStyle.Fill; page.Visible = false; _pageHost.Controls.Add(page); }
         Controls.Add(BuildShell());
         UiTheme.ApplyWindow(this);
+        UiTheme.ApplyTree(this);
 
         var trayMenu = new ContextMenuStrip();
         trayMenu.Items.Add("Open NInfer Manager", null, (_, _) => RestoreFromTray());
@@ -114,14 +138,21 @@ internal sealed class MainForm : Form
         FormClosing += OnFormClosing;
         Shown += OnShown;
         VisibleChanged += (_, _) => { _visibleTimer.Enabled = Visible; if (Visible) RefreshUi(); };
-        _visibleTimer.Tick += (_, _) => RefreshUi();
+        _visibleTimer.Tick += async (_, _) =>
+        {
+            RefreshUi();
+            if (++_gpuRefreshTicks % 5 != 0 || _gpuRefreshRunning) return;
+            _gpuRefreshRunning = true;
+            try { await RefreshGpuAsync(); }
+            finally { _gpuRefreshRunning = false; }
+        };
         _engine.StateChanged += state => PostToUi(() =>
         {
             RefreshUi();
             if (state == EngineState.Unloaded && !Visible) _ = WorkingSetTrimmer.TrimAfterIdleAsync();
         });
         _catalog.CatalogChanged += () => PostToUi(RefreshModels);
-        _logger.LineWritten += _ => { if (Visible && _tabs.SelectedTab?.Text == "Logs") PostToUi(RefreshLogs); };
+        _logger.LineWritten += _ => { if (Visible && _selectedPage == 3) PostToUi(RefreshLogs); };
         _appPropertyGrid.SelectedObject = _settings;
         PopulateProfileSelector();
         _startWithWindows.Checked = StartupIntegration.IsEnabled();
@@ -134,63 +165,57 @@ internal sealed class MainForm : Form
 
     private Control BuildShell()
     {
-        _tabs.Appearance = TabAppearance.FlatButtons;
-        _tabs.ItemSize = new Size(0, 1);
-        _tabs.SizeMode = TabSizeMode.Fixed;
-        _tabs.Multiline = true;
-
         var shell = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = UiTheme.Background };
-        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 224));
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 228));
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        var sidebar = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = UiTheme.Sidebar, Padding = new Padding(14, 18, 14, 14), RowCount = 3 };
+        var sidebar = UiTheme.Role(new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16, 22, 16, 16), RowCount = 3 }, ThemeRole.Sidebar);
         sidebar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         sidebar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         sidebar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var brand = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2, Margin = new Padding(4, 0, 0, 24) };
-        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42)); brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        brand.Controls.Add(new PictureBox { Image = _icon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(32, 32), Margin = new Padding(0, 0, 10, 0) }, 0, 0);
-        brand.Controls.Add(new Label { Text = "NInfer\nManager", AutoSize = true, ForeColor = Color.White, Font = new Font("Segoe UI Variable Display Semibold", 11.5f), Margin = new Padding(0) }, 1, 0);
+        var brand = UiTheme.Role(new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2, Margin = new Padding(4, 0, 0, 28) }, ThemeRole.Sidebar);
+        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46)); brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        brand.Controls.Add(new PictureBox { Image = _icon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(34, 34), Margin = new Padding(0, 1, 10, 0) }, 0, 0);
+        brand.Controls.Add(UiTheme.Role(new Label { Text = "NInfer\nManager", AutoSize = true, Font = new Font("Segoe UI Variable Display Semibold", 12f), Margin = new Padding(0) }, ThemeRole.SidebarText), 1, 0);
         sidebar.Controls.Add(brand, 0, 0);
-        var navigation = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = false };
+        var navigation = UiTheme.Role(new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = false }, ThemeRole.Sidebar);
         string[] names = ["Dashboard", "Models", "Settings", "Logs", "About"];
+        string[] icons = ["⌂", "◇", "⚙", "▤", "ⓘ"];
         for (var index = 0; index < names.Length; index++)
         {
             var pageIndex = index;
             var button = new Button
             {
-                Text = names[index],
-                Width = 192,
-                Height = 46,
-                FlatStyle = FlatStyle.Flat,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(14, 0, 0, 0),
-                ForeColor = Color.FromArgb(210, 220, 231),
-                BackColor = UiTheme.Sidebar,
-                Cursor = Cursors.Hand,
+                Text = $"{icons[index]}     {names[index]}",
+                Width = 196,
                 AccessibleName = $"Open {names[index]} page",
-                Margin = new Padding(0, 0, 0, 4),
+                Margin = new Padding(0, 0, 0, 7),
             };
-            button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(37, 52, 70);
+            UiTheme.StyleButton(button, ButtonKind.Navigation);
             button.Click += (_, _) => SelectPage(pageIndex);
             _navigationButtons.Add(button); navigation.Controls.Add(button);
         }
         sidebar.Controls.Add(navigation, 0, 1);
-        sidebar.Controls.Add(new Label { Text = $"Version {UpdateService.CurrentVersion}\n{(_paths.IsPortable ? "Portable" : "Installed")}", AutoSize = true, ForeColor = Color.FromArgb(145, 163, 181), Padding = new Padding(12, 4, 0, 0) }, 0, 2);
+        sidebar.Controls.Add(UiTheme.Role(new Label { Text = $"Version {UpdateService.CurrentVersion}\n{(_paths.IsPortable ? "Portable" : "Installed")}", AutoSize = true, Padding = new Padding(12, 8, 0, 0) }, ThemeRole.MutedText), 0, 2);
         shell.Controls.Add(sidebar, 0, 0);
 
         var workspace = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = UiTheme.Background, RowCount = 3, ColumnCount = 1 };
-        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
         workspace.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(24, 14, 24, 8), BackColor = UiTheme.Background };
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(26, 13, 26, 9), BackColor = UiTheme.Background };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.Controls.Add(new Label { Text = "Local AI control center", AutoSize = true, Font = new Font("Segoe UI Variable Display Semibold", 13f), ForeColor = UiTheme.Text }, 0, 0);
-        _headerState.ForeColor = UiTheme.Muted; _headerState.Padding = new Padding(0, 5, 0, 0); header.Controls.Add(_headerState, 1, 0);
+        header.Controls.Add(new Label { Text = "Local AI control center", AutoSize = true, Font = new Font("Segoe UI Variable Display Semibold", 13f), Padding = new Padding(0, 7, 0, 0) }, 0, 0);
+        var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
+        var statusCard = UiTheme.Card(ThemeRole.SuccessSoft); statusCard.AutoSize = true; statusCard.Padding = new Padding(12, 8, 12, 8); statusCard.Margin = new Padding(0, 1, 12, 0);
+        _headerState.Text = "●  API Online"; _headerState.Font = new Font("Segoe UI Variable Text Semibold", 9f); UiTheme.Role(_headerState, ThemeRole.SuccessSoft); statusCard.Controls.Add(_headerState);
+        _headerEndpoint.Padding = new Padding(0, 9, 8, 0); UiTheme.Role(_headerEndpoint, ThemeRole.MutedText);
+        UiTheme.StyleButton(_themeToggle, ButtonKind.Ghost); _themeToggle.Height = 36; _themeToggle.Click += (_, _) => ToggleTheme();
+        headerActions.Controls.Add(statusCard); headerActions.Controls.Add(_headerEndpoint); headerActions.Controls.Add(_themeToggle);
+        header.Controls.Add(headerActions, 1, 0);
         workspace.Controls.Add(header, 0, 0);
 
-        _updateBanner.BackColor = UiTheme.Dark ? Color.FromArgb(24, 68, 75) : Color.FromArgb(226, 248, 250);
+        UiTheme.Role(_updateBanner, ThemeRole.AccentSoft);
         _updateBanner.Padding = new Padding(22, 8, 18, 8);
         var updateLayout = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
         updateLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); updateLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -198,7 +223,7 @@ internal sealed class MainForm : Form
         _updateBannerButton.Click += async (_, _) => await InstallAvailableUpdateAsync();
         updateLayout.Controls.Add(_updateBannerText, 0, 0); updateLayout.Controls.Add(_updateBannerButton, 1, 0); _updateBanner.Controls.Add(updateLayout);
         workspace.Controls.Add(_updateBanner, 0, 1);
-        workspace.Controls.Add(_tabs, 0, 2);
+        workspace.Controls.Add(_pageHost, 0, 2);
         shell.Controls.Add(workspace, 1, 0);
         SelectPage(0);
         return shell;
@@ -206,75 +231,86 @@ internal sealed class MainForm : Form
 
     private void SelectPage(int index)
     {
-        _tabs.SelectedIndex = index;
+        _selectedPage = Math.Clamp(index, 0, _pages.Count - 1);
+        for (var pageIndex = 0; pageIndex < _pages.Count; pageIndex++) _pages[pageIndex].Visible = pageIndex == _selectedPage;
+        _pages[_selectedPage].BringToFront();
         for (var i = 0; i < _navigationButtons.Count; i++)
         {
             var selected = i == index;
-            _navigationButtons[i].BackColor = selected ? UiTheme.AccentDark : UiTheme.Sidebar;
-            _navigationButtons[i].ForeColor = selected ? Color.White : Color.FromArgb(210, 220, 231);
+            _navigationButtons[i].BackColor = selected ? UiTheme.AccentSoft : UiTheme.Sidebar;
+            _navigationButtons[i].ForeColor = selected ? UiTheme.Text : UiTheme.SidebarText;
             _navigationButtons[i].Font = new Font("Segoe UI Variable Text", 9.25f, selected ? FontStyle.Bold : FontStyle.Regular);
         }
-        if (_tabs.SelectedTab?.Text == "Logs") RefreshLogs();
+        if (_selectedPage == 3) RefreshLogs();
     }
 
-    private TabPage BuildDashboard()
+    private Panel BuildDashboard()
     {
         var page = Page("Dashboard");
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 22, 28, 24), ColumnCount = 1, RowCount = 6, BackColor = UiTheme.Background };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(PageTitle("Dashboard", "Run local inference without keeping the model in VRAM between sessions."), 0, 0);
-        _noModelCard.Dock = DockStyle.Top; _noModelCard.Height = 126; _noModelCard.BackColor = UiTheme.AccentSoft;
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(26, 18, 26, 18), ColumnCount = 1, RowCount = 7, BackColor = UiTheme.Background };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 238));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 190)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.Controls.Add(PageTitle("Dashboard", "Your local AI engine at a glance."), 0, 0);
+        _noModelCard.Dock = DockStyle.Top; _noModelCard.Height = 104; _noModelCard.ThemeRole = ThemeRole.AccentSoft; _noModelCard.RefreshTheme();
         var empty = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(8) }; empty.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); empty.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         var emptyCopy = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
-        emptyCopy.Controls.Add(new Label { Text = "Choose your first model", AutoSize = true, ForeColor = UiTheme.Text, Font = new Font("Segoe UI Variable Display Semibold", 15f) }, 0, 0);
-        emptyCopy.Controls.Add(new Label { Text = "Nothing is bundled or selected yet. Open Model Manager to install a verified NInfer model.", AutoSize = true, ForeColor = UiTheme.Muted, Padding = new Padding(0, 5, 0, 0) }, 0, 1);
+        emptyCopy.Controls.Add(new Label { Text = "Choose your first model", AutoSize = true, Font = new Font("Segoe UI Variable Display Semibold", 14f) }, 0, 0);
+        emptyCopy.Controls.Add(UiTheme.Role(new Label { Text = "Install a verified NInfer model to begin. Nothing is bundled with the app.", AutoSize = true, Padding = new Padding(0, 5, 0, 0) }, ThemeRole.MutedText), 0, 1);
         var choose = Button("Choose a model", true, true); choose.Click += (_, _) => SelectPage(1); empty.Controls.Add(emptyCopy, 0, 0); empty.Controls.Add(choose, 1, 0); _noModelCard.Controls.Add(empty); root.Controls.Add(_noModelCard, 0, 1);
-        var infoCard = UiTheme.Card(); infoCard.Dock = DockStyle.Top; infoCard.AutoSize = true;
-        var info = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2, Padding = new Padding(2, 4, 2, 4) };
-        info.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155)); info.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        AddInfo(info, "Engine status", _stateValue); AddInfo(info, "Active model", _modelValue); AddInfo(info, "API address", _apiValue);
-        AddInfo(info, "Active profile", _profileValue); AddInfo(info, "GPU", _gpuValue);
-        infoCard.Controls.Add(info); root.Controls.Add(infoCard, 0, 2);
-        var actions = Flow();
-        _loadButton.Click += async (_, _) => await RunEngineActionAsync(() => _engine.EnsureLoadedAsync()); actions.Controls.Add(_loadButton);
-        AddAction(actions, "Unload from VRAM", async () => await RunEngineActionAsync(() => _engine.UnloadAsync("dashboard")));
-        _restartButton.Click += async (_, _) => await RunEngineActionAsync(_engine.RestartAsync); actions.Controls.Add(_restartButton);
-        AddAction(actions, "Open Web UI", () => { OpenUrl(_proxy.WebUiUrl); return Task.CompletedTask; });
-        AddAction(actions, "Copy API address", () => { Clipboard.SetText(_proxy.ApiBaseUrl); return Task.CompletedTask; });
-        AddAction(actions, "Refresh GPU", async () => await RefreshGpuAsync());
-        root.Controls.Add(actions, 0, 3);
 
-        var commandGroup = new GroupBox { Text = "Advanced: generated NInfer command", Dock = DockStyle.Top, Height = 145, Padding = new Padding(10), ForeColor = UiTheme.Text, Visible = false };
-        var command = new TextBox { Multiline = true, ReadOnly = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Text = _engine.BuildCommandPreview() };
-        commandGroup.Controls.Add(command);
-        _engine.StateChanged += _ => PostToUi(() => command.Text = _engine.BuildCommandPreview());
-        var toggleCommand = Button("Show advanced command");
-        toggleCommand.Click += (_, _) => { commandGroup.Visible = !commandGroup.Visible; toggleCommand.Text = commandGroup.Visible ? "Hide advanced command" : "Show advanced command"; };
-        actions.Controls.Add(toggleCommand);
-        root.Controls.Add(commandGroup, 0, 4);
+        var summary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new Padding(0, 4, 0, 0) };
+        summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28)); summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24)); summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24)); summary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
+        var modelCard = UiTheme.Card(); modelCard.Dock = DockStyle.Fill;
+        var modelLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6, Padding = new Padding(4) };
+        modelLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); modelLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); modelLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); modelLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); modelLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); modelLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        modelLayout.Controls.Add(UiTheme.Role(new Label { Text = "Active model", AutoSize = true, Font = new Font("Segoe UI Variable Text Semibold", 9.5f) }, ThemeRole.MutedText), 0, 0);
+        _modelValue.Font = new Font("Segoe UI Variable Display Semibold", 15f); _modelValue.MaximumSize = new Size(245, 0); _modelValue.Margin = new Padding(0, 8, 0, 8); modelLayout.Controls.Add(_modelValue, 0, 1);
+        _stateValue.Font = new Font("Segoe UI Variable Text Semibold", 9f); UiTheme.Role(_stateValue, ThemeRole.SuccessSoft); modelLayout.Controls.Add(_stateValue, 0, 2);
+        _loadButton.Dock = DockStyle.Top; UiTheme.StyleButton(_loadButton, ButtonKind.Primary); _loadButton.Click += async (_, _) => await RunEngineActionAsync(() => _engine.EnsureLoadedAsync()); modelLayout.Controls.Add(_loadButton, 0, 4);
+        _unloadButton.Dock = DockStyle.Top; _unloadButton.Click += async (_, _) => await RunEngineActionAsync(() => _engine.UnloadAsync("dashboard")); modelLayout.Controls.Add(_unloadButton, 0, 4);
+        _restartButton.Dock = DockStyle.Top; _restartButton.Margin = new Padding(0, 7, 0, 0); _restartButton.Click += async (_, _) => await RunEngineActionAsync(_engine.RestartAsync); modelLayout.Controls.Add(_restartButton, 0, 5);
+        modelCard.Controls.Add(modelLayout); summary.Controls.Add(modelCard, 0, 0);
+        summary.Controls.Add(MetricCard(_vramRing), 1, 0); summary.Controls.Add(MetricCard(_contextRing), 2, 0); summary.Controls.Add(MetricCard(_gpuRing), 3, 0);
+        root.Controls.Add(summary, 0, 2);
 
-        var test = new GroupBox { Text = "Test the OpenAI-compatible API", Dock = DockStyle.Fill, Padding = new Padding(10), ForeColor = UiTheme.Text };
-        var testLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
-        testLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); testLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        testLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); testLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        testLayout.Controls.Add(_testPrompt, 0, 0);
-        _sendTestButton.Click += async (_, _) => await SendApiTestAsync(_sendTestButton);
-        testLayout.Controls.Add(_sendTestButton, 1, 0); testLayout.Controls.Add(_testOutput, 0, 1); testLayout.SetColumnSpan(_testOutput, 2);
-        test.Controls.Add(testLayout); root.Controls.Add(test, 0, 5);
+        var details = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        details.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52)); details.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+        var (profileCard, profileBody) = SectionCard("Active profile", "Profile settings currently used when the model loads.");
+        _profileChips.Padding = new Padding(0, 8, 0, 0); profileBody.Controls.Add(_profileChips); details.Controls.Add(profileCard, 0, 0);
+        var (quickCard, quickBody) = SectionCard("Quick actions", "Common tools without opening another page.");
+        var quick = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Padding = new Padding(0, 8, 0, 0) };
+        quick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f)); quick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f)); quick.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34f));
+        var web = ActionTile("◎\nOpen Web UI"); web.Click += (_, _) => OpenUrl(_proxy.WebUiUrl);
+        var copy = ActionTile("▣\nCopy API address"); copy.Click += (_, _) => Clipboard.SetText(_proxy.ApiBaseUrl);
+        _sendTestButton.Text = "⚗\nRun API test"; UiTheme.StyleButton(_sendTestButton, ButtonKind.ActionTile);
+        quick.Controls.Add(web, 0, 0); quick.Controls.Add(copy, 1, 0); quick.Controls.Add(_sendTestButton, 2, 0); quickBody.Controls.Add(quick); details.Controls.Add(quickCard, 1, 0);
+        root.Controls.Add(details, 0, 3);
+
+        var (activityCard, activityBody) = SectionCard("Recent activity", "Live service summary. Detailed output remains available in Logs.");
+        var activity = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(2, 7, 2, 0) };
+        activity.Controls.Add(_activityEngine, 0, 0); activity.Controls.Add(_activityApi, 0, 1); activity.Controls.Add(_activityLifecycle, 0, 2); activityBody.Controls.Add(activity); root.Controls.Add(activityCard, 0, 4);
+
+        var (testCard, testBody) = SectionCard("API test", "Send a small OpenAI-compatible request and inspect the response."); testCard.Visible = false; testCard.Height = 176;
+        var testLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Padding = new Padding(0, 8, 0, 0) };
+        testLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); testLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); testLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); testLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        testLayout.Controls.Add(_testPrompt, 0, 0); var send = Button("Send", true, true); send.Click += async (_, _) => await SendApiTestAsync(send); testLayout.Controls.Add(send, 1, 0); testLayout.Controls.Add(_testOutput, 0, 1); testLayout.SetColumnSpan(_testOutput, 2); testBody.Controls.Add(testLayout); root.Controls.Add(testCard, 0, 5);
+        _sendTestButton.Click += async (_, _) => { testCard.Visible = true; await SendApiTestAsync(_sendTestButton); };
+
+        UiTheme.Role(_footerStatus, ThemeRole.MutedText); _footerStatus.Padding = new Padding(4, 5, 0, 2); root.Controls.Add(_footerStatus, 0, 6);
         page.Controls.Add(root); return page;
     }
 
-    private TabPage BuildModelsPage()
+    private Panel BuildModelsPage()
     {
         var page = Page("Models");
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22), RowCount = 6, ColumnCount = 1, BackColor = UiTheme.Background };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(26, 18, 26, 22), RowCount = 6, ColumnCount = 1, BackColor = UiTheme.Background };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.Controls.Add(PageTitle("Model Manager", "Download, verify and activate official NInfer model artifacts."), 0, 0);
+        var filterCard = UiTheme.Card(ThemeRole.SurfaceAlt); filterCard.Dock = DockStyle.Top; filterCard.Height = 62; filterCard.Padding = new Padding(14, 8, 14, 8);
         var filters = Flow();
         _modelSearch.TextChanged += (_, _) => RefreshModels(); _modelFilter.SelectedIndexChanged += (_, _) => RefreshModels();
-        filters.Controls.Add(_modelSearch); filters.Controls.Add(_modelFilter); root.Controls.Add(filters, 0, 1);
+        filters.Controls.Add(_modelSearch); filters.Controls.Add(_modelFilter); filterCard.Controls.Add(filters); root.Controls.Add(filterCard, 0, 1);
         _modelsGrid.Dock = DockStyle.Fill; _modelsGrid.ReadOnly = true; _modelsGrid.AllowUserToAddRows = false; _modelsGrid.AllowUserToDeleteRows = false;
         _modelsGrid.AutoGenerateColumns = false; _modelsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect; _modelsGrid.MultiSelect = false;
         _modelsGrid.RowHeadersVisible = false; _modelsGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
@@ -285,35 +321,43 @@ internal sealed class MainForm : Form
         _modelsGrid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Vision", HeaderText = "Vision", FillWeight = 55 });
         _modelsGrid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "Status", FillWeight = 105 });
         _modelsGrid.SelectionChanged += (_, _) => RefreshModelButtons();
-        root.Controls.Add(_modelsGrid, 0, 2);
-        var actions = Flow();
+        var gridCard = UiTheme.Card(); gridCard.Dock = DockStyle.Fill; gridCard.Padding = new Padding(1); gridCard.Controls.Add(_modelsGrid); root.Controls.Add(gridCard, 0, 2);
+        var actionsCard = UiTheme.Card(); actionsCard.Dock = DockStyle.Top; actionsCard.Height = 104; actionsCard.Padding = new Padding(12, 6, 12, 6);
+        var actions = Flow(); actions.AutoSize = false;
         _installButton.Click += async (_, _) => await StartDownloadAsync(); actions.Controls.Add(_installButton);
         _cancelDownloadButton.Click += (_, _) => _downloadCancellation?.Cancel(); actions.Controls.Add(_cancelDownloadButton);
         AddAction(actions, "Set active", SetSelectedActiveAsync); AddAction(actions, "Verify", VerifySelectedAsync);
         AddAction(actions, "Import file", ImportSelectedAsync); AddAction(actions, "Delete", DeleteSelectedAsync);
         AddAction(actions, "Open model card", () => { var e = SelectedEntry(); if (e is not null) OpenUrl(e.ModelCardUrl); return Task.CompletedTask; });
         AddAction(actions, "Check for new models", RefreshCatalogAsync);
-        root.Controls.Add(actions, 0, 3);
+        actionsCard.Controls.Add(actions); root.Controls.Add(actionsCard, 0, 3);
         var progress = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
         progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); progress.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
         progress.Controls.Add(_modelProgress, 0, 0); progress.Controls.Add(_modelProgressText, 1, 0); root.Controls.Add(progress, 0, 4);
-        root.Controls.Add(new Label { Text = "Downloads can be paused and resumed. A model becomes usable only after its official size and SHA-256 are verified.", AutoSize = true, ForeColor = UiTheme.Muted, Padding = new Padding(0, 6, 0, 0) }, 0, 5);
+        root.Controls.Add(UiTheme.Role(new Label { Text = "Downloads can be paused and resumed. Models are activated only after size and SHA-256 verification.", AutoSize = true, Padding = new Padding(4, 5, 0, 0) }, ThemeRole.MutedText), 0, 5);
         page.Controls.Add(root); return page;
     }
 
-    private TabPage BuildSettingsPage()
+    private Panel BuildSettingsPage()
     {
         var page = Page("Settings");
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22), RowCount = 4, ColumnCount = 1 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(26, 18, 26, 22), RowCount = 4, ColumnCount = 1 };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.Controls.Add(PageTitle("Settings", "Start with the essentials. Every NInfer option remains available under Advanced."), 0, 0);
-        var top = Flow(); top.Controls.Add(new Label { Text = "Model profile:", AutoSize = true, Padding = new Padding(0, 8, 4, 0) });
+        var topCard = UiTheme.Card(ThemeRole.SurfaceAlt); topCard.Dock = DockStyle.Top; topCard.Height = 62; topCard.Padding = new Padding(14, 7, 14, 7);
+        var top = Flow(); top.Controls.Add(new Label { Text = "Model profile", AutoSize = true, Font = new Font("Segoe UI Variable Text Semibold", 9.25f), Padding = new Padding(0, 8, 5, 0) });
         _profileModel.SelectedIndexChanged += (_, _) => SelectProfile(); top.Controls.Add(_profileModel); top.Controls.Add(_startWithWindows);
-        root.Controls.Add(top, 0, 1);
+        topCard.Controls.Add(top); root.Controls.Add(topCard, 0, 1);
 
-        var sections = new TabControl { Dock = DockStyle.Fill, Padding = new Point(16, 7) };
-        var essentials = new TabPage("Essentials") { BackColor = UiTheme.Background, Padding = new Padding(16) };
+        var sections = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
+        sections.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); sections.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var selector = UiTheme.Card(ThemeRole.SurfaceAlt); selector.Dock = DockStyle.Fill; selector.Padding = new Padding(10, 6, 10, 6); selector.Margin = new Padding(0, 0, 0, 8);
+        var selectorFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        _essentialsTabButton.Width = 130; _advancedTabButton.Width = 130;
+        _essentialsTabButton.Click += (_, _) => ShowSettingsSection(false); _advancedTabButton.Click += (_, _) => ShowSettingsSection(true);
+        selectorFlow.Controls.Add(_essentialsTabButton); selectorFlow.Controls.Add(_advancedTabButton); selector.Controls.Add(selectorFlow); sections.Controls.Add(selector, 0, 0);
+        _essentialsSection = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Background, Padding = new Padding(0) };
         var essentialsCard = UiTheme.Card(); essentialsCard.Dock = DockStyle.Fill; essentialsCard.AutoScroll = true;
         var fields = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3, Padding = new Padding(4) };
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 290)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -334,14 +378,15 @@ internal sealed class MainForm : Form
         AddAction(updateActions, "Check for updates", async () => await CheckForUpdatesAsync(true), true);
         updateActions.Controls.Add(_updateProgressText); fields.Controls.Add(updateActions, 1, fields.RowCount); fields.SetColumnSpan(updateActions, 2); fields.RowCount++;
         fields.Controls.Add(_updateProgress, 0, fields.RowCount); fields.SetColumnSpan(_updateProgress, 3); fields.RowCount++;
-        essentialsCard.Controls.Add(fields); essentials.Controls.Add(essentialsCard);
+        essentialsCard.Controls.Add(fields); _essentialsSection.Controls.Add(essentialsCard);
 
-        var advanced = new TabPage("Advanced") { BackColor = UiTheme.Background, Padding = new Padding(8) };
+        _advancedSection = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Background, Padding = new Padding(0) };
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 360, BackColor = UiTheme.Background };
-        var appGroup = new GroupBox { Text = "Application and API", Dock = DockStyle.Fill, Padding = new Padding(6) }; appGroup.Controls.Add(_appPropertyGrid);
-        var modelGroup = new GroupBox { Text = "Complete NInfer model profile", Dock = DockStyle.Fill, Padding = new Padding(6) }; modelGroup.Controls.Add(_profilePropertyGrid);
-        split.Panel1.Controls.Add(appGroup); split.Panel2.Controls.Add(modelGroup); advanced.Controls.Add(split);
-        sections.TabPages.Add(essentials); sections.TabPages.Add(advanced); root.Controls.Add(sections, 0, 2);
+        var appGroup = UiTheme.Card(); appGroup.Dock = DockStyle.Fill; appGroup.Padding = new Padding(8); appGroup.Controls.Add(_appPropertyGrid);
+        var modelGroup = UiTheme.Card(); modelGroup.Dock = DockStyle.Fill; modelGroup.Padding = new Padding(8); modelGroup.Controls.Add(_profilePropertyGrid);
+        split.Panel1.Controls.Add(appGroup); split.Panel2.Controls.Add(modelGroup); _advancedSection.Controls.Add(split);
+        _settingsSectionHost.Controls.Add(_advancedSection); _settingsSectionHost.Controls.Add(_essentialsSection); sections.Controls.Add(_settingsSectionHost, 0, 1); root.Controls.Add(sections, 0, 2);
+        ShowSettingsSection(false);
         var actions = Flow();
         AddAction(actions, "Save settings", SaveSettingsAsync, true);
         AddAction(actions, "Restore recommended model defaults", RestoreProfileAsync);
@@ -350,24 +395,24 @@ internal sealed class MainForm : Form
         root.Controls.Add(actions, 0, 3); page.Controls.Add(root); return page;
     }
 
-    private TabPage BuildLogsPage()
+    private Panel BuildLogsPage()
     {
         var page = Page("Logs");
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22), RowCount = 3, ColumnCount = 1 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(26, 18, 26, 22), RowCount = 3, ColumnCount = 1 };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.Controls.Add(PageTitle("Logs and diagnostics", "Inspect recent activity or create a redacted support package."), 0, 0);
-        root.Controls.Add(_logBox, 0, 1);
+        var logCard = UiTheme.Card(); logCard.Dock = DockStyle.Fill; logCard.Padding = new Padding(10); logCard.Controls.Add(_logBox); root.Controls.Add(logCard, 0, 1);
         var actions = Flow(); AddAction(actions, "Refresh", () => { RefreshLogs(); return Task.CompletedTask; });
         AddAction(actions, "Open log file", () => { Process.Start(new ProcessStartInfo(_logger.FilePath) { UseShellExecute = true }); return Task.CompletedTask; });
         AddAction(actions, "Create diagnostics package", CreateDiagnosticsAsync); root.Controls.Add(actions, 0, 2);
         page.Controls.Add(root); return page;
     }
 
-    private TabPage BuildAboutPage()
+    private Panel BuildAboutPage()
     {
         var page = Page("About");
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(22), RowCount = 3, ColumnCount = 1 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(26, 18, 26, 22), RowCount = 3, ColumnCount = 1 };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.Controls.Add(PageTitle("About NInfer Manager", "Version, update and local storage information."), 0, 0);
         var card = UiTheme.Card(); card.Dock = DockStyle.Fill;
@@ -406,13 +451,44 @@ internal sealed class MainForm : Form
 
     private void RefreshUi()
     {
-        _stateValue.Text = _engine.State.ToString();
         var active = _engine.ActiveEntryOrNull;
+        var loaded = _engine.IsLoaded;
+        _stateValue.Text = loaded ? "●  Ready" : _engine.State == EngineState.Loading ? "●  Loading" : "○  Unloaded";
+        UiTheme.Role(_stateValue, loaded ? ThemeRole.SuccessSoft : ThemeRole.WarningSoft);
         _modelValue.Text = active?.DisplayName ?? "No model selected";
         _apiValue.Text = _proxy.ApiBaseUrl;
         _profileValue.Text = active is null ? "Install and activate a model to configure its profile" : $"{_engine.ActiveProfile.MaxContext:N0} context | {_engine.ActiveProfile.KvPrecision} KV | Vision {(_engine.ActiveProfile.VisionEnabled ? "ON" : "OFF")} | Auto-unload {(_settings.AutoUnloadEnabled ? _settings.IdleMinutes + " min" : "OFF")}";
-        _headerState.Text = $"{_engine.State}  •  {active?.DisplayName ?? "No model"}  •  {_proxy.ApiBaseUrl}";
-        _noModelCard.Visible = active is null; _loadButton.Enabled = active is not null; _restartButton.Enabled = active is not null; _sendTestButton.Enabled = active is not null;
+        _headerState.Text = "●  API Online"; _headerEndpoint.Text = _proxy.ApiBaseUrl.Replace("http://", string.Empty).Replace("/v1", string.Empty);
+        _themeToggle.Text = UiTheme.Dark ? "☀  Light" : "☾  Dark";
+        _noModelCard.Visible = active is null;
+        _loadButton.Visible = active is not null && !loaded; _loadButton.Enabled = active is not null;
+        _unloadButton.Visible = active is not null && loaded; _unloadButton.Enabled = loaded;
+        _restartButton.Enabled = active is not null; _sendTestButton.Enabled = active is not null;
+        var profile = active is null ? null : _engine.ActiveProfile;
+        _contextRing.Percentage = profile is null ? 0 : (int)Math.Round(Math.Clamp(profile.MaxContext / 262144d, 0, 1) * 100);
+        _contextRing.ValueText = profile is null ? "—" : profile.MaxContext >= 1000 ? $"{profile.MaxContext / 1000d:0.#}K" : profile.MaxContext.ToString("N0");
+        _contextRing.DetailText = profile is null ? "No active profile" : "configured capacity";
+        var signature = active is null ? string.Empty : $"{active.FileName}|{profile!.KvPrecision}|{profile.MaxContext}|{profile.VisionEnabled}|{profile.SpeculativeMode}|{profile.DraftTokens}|{profile.ThinkingEnabled}|{UiTheme.Preference}";
+        if (signature != _lastProfileSignature)
+        {
+            _profileChips.Controls.Clear();
+            if (active is null) _profileChips.Controls.Add(Chip("Choose a model to create a profile"));
+            else
+            {
+                _profileChips.Controls.Add(Chip(active.Weights.ToUpperInvariant()));
+                _profileChips.Controls.Add(Chip($"{profile!.KvPrecision.ToString().ToUpperInvariant()} KV"));
+                _profileChips.Controls.Add(Chip($"{profile.MaxContext / 1000d:0.#}K Context"));
+                _profileChips.Controls.Add(Chip($"Vision {(profile.VisionEnabled ? "ON" : "OFF")}"));
+                _profileChips.Controls.Add(Chip(profile.SpeculativeMode == SpeculativeMode.Disabled ? "Speculation OFF" : $"{profile.SpeculativeMode.ToString().ToUpperInvariant()}{profile.DraftTokens}"));
+                _profileChips.Controls.Add(Chip($"Thinking {(profile.ThinkingEnabled ? "ON" : "OFF")}"));
+            }
+            _lastProfileSignature = signature;
+        }
+        _activityEngine.Text = loaded ? $"●   {active?.DisplayName} is loaded and ready." : $"○   Engine is {_engine.State.ToString().ToLowerInvariant()}.";
+        _activityEngine.ForeColor = loaded ? UiTheme.Success : UiTheme.Muted;
+        _activityApi.Text = $"●   OpenAI-compatible API is listening on {_proxy.ApiBaseUrl}."; _activityApi.ForeColor = UiTheme.Teal;
+        _activityLifecycle.Text = _settings.AutoUnloadEnabled ? $"○   Automatic VRAM release is set to {_settings.IdleMinutes:0.#} minute(s)." : "○   Automatic VRAM release is disabled."; _activityLifecycle.ForeColor = UiTheme.Muted;
+        _footerStatus.Text = _settings.AutoUnloadEnabled ? $"◷  Auto-unload after {_settings.IdleMinutes:0.#} idle minute(s)" : "◷  Auto-unload is disabled";
         _tray.Text = ("NInfer Manager - " + _engine.State)[..Math.Min(63, ("NInfer Manager - " + _engine.State).Length)];
     }
 
@@ -479,7 +555,14 @@ internal sealed class MainForm : Form
     {
         _gpuValue.Text = "Checking...";
         var gpu = await GpuInfo.QueryAsync();
-        if (!IsDisposed) _gpuValue.Text = gpu?.Summary ?? "NVIDIA GPU information unavailable";
+        if (IsDisposed) return;
+        _gpuValue.Text = gpu?.Summary ?? "NVIDIA GPU information unavailable";
+        _vramRing.Percentage = gpu is null || gpu.MemoryTotalMiB <= 0 ? 0 : (int)Math.Round(gpu.MemoryUsedMiB * 100d / gpu.MemoryTotalMiB);
+        _vramRing.ValueText = gpu is null ? "—" : $"{_vramRing.Percentage}%";
+        _vramRing.DetailText = gpu is null ? "Unavailable" : $"{gpu.MemoryUsedMiB / 1024d:0.0} / {gpu.MemoryTotalMiB / 1024d:0.#} GB";
+        _gpuRing.Percentage = gpu?.UtilizationPercent ?? 0;
+        _gpuRing.ValueText = gpu is null ? "—" : $"{gpu.UtilizationPercent}%";
+        _gpuRing.DetailText = gpu is null ? "Unavailable" : $"{gpu.TemperatureC}°C";
     }
 
     private void RefreshModels()
@@ -718,6 +801,38 @@ internal sealed class MainForm : Form
     private void ExitCompletely() { _realExit = true; _tray.Visible = false; Close(); }
     private static void OpenUrl(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
+    private void ToggleTheme()
+    {
+        try
+        {
+            _settings.Theme = UiTheme.Dark ? ThemePreference.Light : ThemePreference.Dark;
+            _settingsStore.Save(_settings);
+            UiTheme.SetTheme(_settings.Theme, this);
+            _lastProfileSignature = string.Empty;
+            RefreshUi();
+            SelectPage(_selectedPage);
+            ShowSettingsSection(_advancedSettingsVisible);
+            _appPropertyGrid.Refresh();
+            _profilePropertyGrid.Refresh();
+        }
+        catch (Exception exception)
+        {
+            _logger.Write("Theme could not be changed", exception);
+            MessageBox.Show(this, exception.Message, "Theme could not be changed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void ShowSettingsSection(bool advanced)
+    {
+        if (_essentialsSection is null || _advancedSection is null) return;
+        _advancedSettingsVisible = advanced;
+        _essentialsSection.Visible = !advanced; _advancedSection.Visible = advanced;
+        (advanced ? _advancedSection : _essentialsSection).BringToFront();
+        UiTheme.StyleButton(_essentialsTabButton, ButtonKind.Secondary); UiTheme.StyleButton(_advancedTabButton, ButtonKind.Secondary);
+        var selected = advanced ? _advancedTabButton : _essentialsTabButton;
+        selected.BackColor = UiTheme.AccentSoft; selected.ForeColor = UiTheme.Text; selected.FlatAppearance.BorderColor = UiTheme.Accent;
+    }
+
     private void PostToUi(Action action)
     {
         if (IsDisposed || Disposing || !IsHandleCreated) return;
@@ -731,12 +846,42 @@ internal sealed class MainForm : Form
         base.Dispose(disposing);
     }
 
-    private static TabPage Page(string text) => new(text) { BackColor = UiTheme.Background, ForeColor = UiTheme.Text };
+    private static RoundedPanel MetricCard(MetricRing ring)
+    {
+        var card = UiTheme.Card(); card.Dock = DockStyle.Fill; card.Padding = new Padding(8); card.Controls.Add(ring); return card;
+    }
+
+    private static (RoundedPanel Card, Panel Content) SectionCard(string title, string subtitle)
+    {
+        var card = UiTheme.Card(); card.Dock = DockStyle.Fill; card.Padding = new Padding(16);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var heading = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        heading.Controls.Add(new Label { Text = title, AutoSize = true, Font = new Font("Segoe UI Variable Display Semibold", 11f) }, 0, 0);
+        heading.Controls.Add(UiTheme.Role(new Label { Text = subtitle, AutoSize = true, Font = new Font("Segoe UI Variable Text", 8.75f) }, ThemeRole.MutedText), 0, 1);
+        var content = new Panel { Dock = DockStyle.Fill };
+        layout.Controls.Add(heading, 0, 0); layout.Controls.Add(content, 0, 1); card.Controls.Add(layout); return (card, content);
+    }
+
+    private static Button ActionTile(string text)
+    {
+        var button = new Button { Text = text, Dock = DockStyle.Fill, Margin = new Padding(4), AccessibleName = text.Replace("\n", " ") };
+        UiTheme.StyleButton(button, ButtonKind.ActionTile); return button;
+    }
+
+    private static Control Chip(string text)
+    {
+        var chip = UiTheme.Card(ThemeRole.AccentSoft); chip.Size = new Size(125, 36); chip.Padding = new Padding(7, 7, 7, 5); chip.Margin = new Padding(0, 0, 7, 8);
+        chip.Controls.Add(new Label { Text = text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, AutoEllipsis = true, Font = new Font("Segoe UI Variable Text Semibold", 8.75f) });
+        return chip;
+    }
+
+    private static Panel Page(string text) => new() { Name = text, AccessibleName = text, BackColor = UiTheme.Background, ForeColor = UiTheme.Text };
     private static Control PageTitle(string title, string subtitle)
     {
         var panel = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, RowCount = 2, Margin = new Padding(0, 0, 0, 14) };
         panel.Controls.Add(new Label { Text = title, AutoSize = true, ForeColor = UiTheme.Text, Font = new Font("Segoe UI Variable Display Semibold", 20f) }, 0, 0);
-        panel.Controls.Add(new Label { Text = subtitle, AutoSize = true, ForeColor = UiTheme.Muted, Font = new Font("Segoe UI Variable Text", 9.5f), Padding = new Padding(0, 2, 0, 0) }, 0, 1);
+        panel.Controls.Add(UiTheme.Role(new Label { Text = subtitle, AutoSize = true, Font = new Font("Segoe UI Variable Text", 9.5f), Padding = new Padding(0, 2, 0, 0) }, ThemeRole.MutedText), 0, 1);
         return panel;
     }
     private static Label Heading(string text) => new() { Text = text, AutoSize = true, ForeColor = UiTheme.Text, Font = new Font("Segoe UI Variable Display Semibold", 17f), Padding = new Padding(0, 0, 0, 6) };
@@ -747,13 +892,13 @@ internal sealed class MainForm : Form
         UiTheme.StyleButton(button, primary, danger); return button;
     }
     private static FlowLayoutPanel Flow() => new() { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Padding = new Padding(0, 6, 0, 6) };
-    private static void AddInfo(TableLayoutPanel table, string name, Control value) { var row = table.RowCount++; table.RowStyles.Add(new RowStyle(SizeType.AutoSize)); table.Controls.Add(new Label { Text = name, AutoSize = true, ForeColor = UiTheme.Muted, Font = new Font("Segoe UI Variable Text Semibold", 9f), Padding = new Padding(0, 4, 0, 3) }, 0, row); table.Controls.Add(value, 1, row); }
+    private static void AddInfo(TableLayoutPanel table, string name, Control value) { var row = table.RowCount++; table.RowStyles.Add(new RowStyle(SizeType.AutoSize)); table.Controls.Add(UiTheme.Role(new Label { Text = name, AutoSize = true, Font = new Font("Segoe UI Variable Text Semibold", 9f), Padding = new Padding(0, 4, 0, 3) }, ThemeRole.MutedText), 0, row); table.Controls.Add(value, 1, row); }
     private static void AddSetting(TableLayoutPanel table, string name, Control control, string description)
     {
         var row = table.RowCount++; table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         table.Controls.Add(new Label { Text = name, AutoSize = true, ForeColor = UiTheme.Text, Font = new Font("Segoe UI Variable Text Semibold", 9.25f), Padding = new Padding(0, 9, 8, 9) }, 0, row);
         control.Margin = new Padding(0, 5, 12, 5); control.AccessibleDescription = description; table.Controls.Add(control, 1, row);
-        table.Controls.Add(new Label { Text = description, AutoSize = true, MaximumSize = new Size(420, 0), ForeColor = UiTheme.Muted, Padding = new Padding(0, 9, 0, 9) }, 2, row);
+        table.Controls.Add(UiTheme.Role(new Label { Text = description, AutoSize = true, MaximumSize = new Size(420, 0), Padding = new Padding(0, 9, 0, 9) }, ThemeRole.MutedText), 2, row);
     }
     private static void AddAction(FlowLayoutPanel flow, string text, Func<Task> action, bool primary = false, bool danger = false) { var button = Button(text, true, primary, danger); button.Click += async (_, _) => { button.Enabled = false; try { await action(); } finally { if (!button.IsDisposed) button.Enabled = true; } }; flow.Controls.Add(button); }
 

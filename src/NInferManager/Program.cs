@@ -24,6 +24,7 @@ internal static class Program
         using var logger = new AppLogger(paths.LogFile);
         var settingsStore = new SettingsStore(paths.SettingsFile, logger);
         var settings = settingsStore.Load();
+        UiTheme.Initialize(settings.Theme);
         using var icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? (Icon)SystemIcons.Application.Clone();
         var portResult = PortManagement.Resolve(settings);
         if (portResult.Port == 0)

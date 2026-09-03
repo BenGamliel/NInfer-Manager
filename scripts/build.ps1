@@ -11,6 +11,7 @@ $sourceProject = Join-Path $projectRoot 'src\NInferManager\NInferManager.csproj'
 $buildRoot = Join-Path $projectRoot 'build'
 $publishRoot = Join-Path $buildRoot 'publish'
 $portableRoot = Join-Path $projectRoot 'dist\Portable\NInfer Manager'
+$portableReleaseRoot = Join-Path $buildRoot 'portable-release\NInfer Manager'
 $installedRoot = Join-Path $buildRoot 'installed-payload'
 $distRoot = Join-Path $projectRoot 'dist'
 $engineSourcePath = (Resolve-Path -LiteralPath $EngineSource).Path
@@ -30,8 +31,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $engineSourcePath 'ninfer-serve.exe'
 Assert-ProjectChild $buildRoot
 Assert-ProjectChild $portableRoot
 Remove-Item -LiteralPath $buildRoot -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item -LiteralPath $portableRoot -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path $publishRoot, $portableRoot, $installedRoot, $distRoot | Out-Null
+if (Test-Path -LiteralPath $portableRoot) {
+    Get-ChildItem -LiteralPath $portableRoot -Force |
+        Where-Object { $_.Name -notin @('Models', 'Data') } |
+        Remove-Item -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $publishRoot, $portableRoot, $portableReleaseRoot, $installedRoot, $distRoot | Out-Null
 
 dotnet publish $sourceProject -c $Configuration -r win-x64 --self-contained true `
     -p:Version=$Version -o $publishRoot
@@ -60,9 +65,12 @@ function Copy-Payload([string] $target, [bool] $portable) {
         $source = Join-Path $engineSourcePath $file
         if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $engineTarget }
     }
-    $webUiSource = Join-Path $engineSourcePath 'models\webui'
+    $webUiSource = Join-Path $engineSourcePath 'webui'
     if (-not (Test-Path -LiteralPath (Join-Path $webUiSource 'index.html'))) {
-        throw 'The EngineSource does not contain models\webui\index.html.'
+        $webUiSource = Join-Path $engineSourcePath 'models\webui'
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $webUiSource 'index.html'))) {
+        throw 'The EngineSource does not contain webui\index.html or models\webui\index.html.'
     }
     Copy-Item -LiteralPath $webUiSource -Destination (Join-Path $engineTarget 'webui') -Recurse
     Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination (Join-Path $licenseTarget 'NInfer-and-Manager-Apache-2.0.txt')
@@ -75,11 +83,12 @@ Open NInfer Manager, select Models, and install an official artifact.
 }
 
 Copy-Payload -target $portableRoot -portable $true
+Copy-Payload -target $portableReleaseRoot -portable $true
 Copy-Payload -target $installedRoot -portable $false
 
 $portableZip = Join-Path $distRoot "NInfer-Manager-Portable-$Version.zip"
 Remove-Item -LiteralPath $portableZip -Force -ErrorAction SilentlyContinue
-Compress-Archive -LiteralPath $portableRoot -DestinationPath $portableZip -CompressionLevel Optimal
+Compress-Archive -LiteralPath $portableReleaseRoot -DestinationPath $portableZip -CompressionLevel Optimal
 
 $isccCandidates = @(
     (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),

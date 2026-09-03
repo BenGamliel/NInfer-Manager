@@ -10,6 +10,9 @@ internal enum SpeculativeMode { Disabled, Mtp, Dflash }
 
 internal sealed class AppSettings
 {
+    [Category("Appearance"), DisplayName("Color theme")]
+    public ThemePreference Theme { get; set; } = ThemePreference.Light;
+
     [Category("Application"), DisplayName("Start minimized")]
     public bool StartMinimized { get; set; }
 
