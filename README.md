@@ -1,6 +1,6 @@
 <p align="center"><img src="src/NInferManager/Assets/ninfer-manager.png" width="128" alt="NInfer Manager icon"></p>
 <h1 align="center">NInfer Manager</h1>
-<p align="center">A lightweight, portable Windows control center for local NInfer models.<br>No terminal, no permanently loaded model, and no model files bundled.</p>
+<p align="center">A lightweight Windows control center for local NInfer models.<br>Modern Light/Dark interface, no terminal, no permanently loaded model, and no model files bundled.</p>
 <p align="center">
   <img alt="Windows" src="https://img.shields.io/badge/Windows-11_x64-0078D4?logo=windows11">
   <img alt=".NET" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet">
@@ -13,8 +13,9 @@
 
 ![NInfer Manager dashboard](docs/images/dashboard.png)
 
-The interface includes complete warm Light and Dark themes, including inputs,
-menus, scrollbars and advanced controls, and remembers the selected mode.
+The modern dashboard keeps engine state, VRAM, GPU use, context capacity and the
+active profile visible at a glance. Complete warm Light and Dark themes cover
+inputs, menus, scrollbars and advanced controls, and the selected mode is remembered.
 
 ![NInfer Manager dashboard in Dark mode](docs/images/dashboard-dark.png)
 
@@ -53,12 +54,13 @@ NInfer is fast, but a command line and long launch arguments should not be a req
 | Verified application updates | Manual | Automatic and on demand |
 | Busy API port recovery | Startup failure | Automatic or locked |
 | Guided first setup | No | Built in and skippable |
+| Context-aware model actions | No | Shows only actions valid for the selected model |
 
 ## Highlights
 
 - **On-demand inference:** the Web UI and API can stay online without consuming model VRAM. The first inference request loads NInfer automatically.
 - **Full lifecycle control:** load, unload, restart, change the idle timer or disable automatic unloading from the app or tray icon.
-- **Model Manager:** discover official model cards, download with resume, validate size and SHA-256, import, select, verify or move a model to the Recycle Bin.
+- **Model Manager:** discover official model cards, download with resume, validate size and SHA-256, import, activate, verify or move a model to the Recycle Bin. The active or installed model is selected automatically, and unavailable actions stay hidden.
 - **Detailed profiles:** context size, Vision/video, shared K/V precision, KV capacity, CUDA graphs, MTP/DFlash, media budgets, queues, caches, thinking and sampling controls.
 - **Safe local defaults:** loopback-only API, optional bearer token, one running instance and child-process cleanup through a Windows Job Object.
 - **Small idle footprint:** native WinForms UI; no Electron runtime and no embedded browser process.
